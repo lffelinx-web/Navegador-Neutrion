@@ -110,6 +110,22 @@ struct BrowserView: View {
         .animation(.spring(response: 0.32, dampingFraction: 0.9), value: collapsed)
     }
 
+    // MARK: - Pieces
+
+    @ViewBuilder
+    private var progressBar: some View {
+        if controller.isLoading {
+            GeometryReader { geometry in
+                Capsule()
+                    .fill(LinearGradient.neutrin)
+                    .frame(width: max(geometry.size.width * controller.progress, 24), height: 3)
+                    .animation(.easeOut(duration: 0.2), value: controller.progress)
+            }
+            .frame(height: 3)
+            .transition(.opacity)
+        }
+    }
+
     /// Slim address line shown while scrolling down; tap to bring the toolbar back.
     private var compactBar: some View {
         Button {

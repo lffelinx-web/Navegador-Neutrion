@@ -16,70 +16,98 @@ struct BrowserView: View {
     @State private var showSettings = false
     @FocusState private var addressFocused: Bool
 
+    private var collapsed: Bool { controller.isToolbarCollapsed && !isEditing && readerArticle == nil }
+
+    /// Color behind the clock / Dynamic Island: whatever is at the top of the page.
+    private var topColor: UIColor {
+        controller.pageTopColor ?? controller.topBarColor ?? .systemBackground
+    }
+
+    /// Color behind the toolbar: whatever is at the bottom of the page.
+    private var bottomColor: UIColor {
+        controller.pageBottomColor ?? .systemBackground
+    }
+
     var body: some View {
         // The page sits between the status bar and the toolbar, never underneath them,
         // so sticky headers and bottom bars of websites stay visible.
         VStack(spacing: 0) {
             WebViewContainer(webView: controller.webView)
                 .overlay(alignment: .top) { progressBar }
+                .overlay(alignment: .top) { topFade }
             bottomBar
         }
-        // The status bar area takes the page's own color (theme-color), like Safari.
+        // When collapsed, the address line moves into the home-indicator strip, like Safari.
+        .ignoresSafeArea(.container, edges: collapsed ? .bottom : [])
         .background {
-            Color(uiColor: controller.topBarColor ?? .systemBackground)
-                .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.25), value: controller.topBarColor)
+            VStack(spacing: 0) {
+                Color(uiColor: topColor)
+                Color(uiColor: bottomColor)
+            }
+            .ignoresSafeArea()
+            .animation(.easeInOut(duration: 0.25), value: topColor)
+            .animation(.easeInOut(duration: 0.25), value: bottomColor)
         }
+        // Clock and battery switch to light text on dark pages.
+        .background(WindowAppearance(style: windowStyle))
+        .overlay {
+            if let article = readerArticle {
+                ReaderView(article: article, onClose: closeReader) { url in
+                    closeReader()
+                    store.open(url)
+                }
+                .transition(.move(edge: .bottom))
+                .zIndex(1)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: readerArticle?.id)
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(store)
         }
         .sheet(isPresented: $showShields) {
             ShieldsPanel(controller: controller).environmentObject(store)
         }
-        .fullScreenCover(item: $readerArticle) { article in
-            ReaderView(article: article) { url in store.open(url) }
-                .environmentObject(store)
-        }
         .alert("El modo lectura no está disponible en esta página", isPresented: $readerFailed) {
             Button("Aceptar", role: .cancel) {}
         }
     }
 
-    /// Full toolbar, or a slim address line while scrolling down. Either way it sits
-    /// below the page instead of covering it.
+    private func closeReader() {
+        readerArticle = nil
+    }
+
+    /// Light or dark window chrome to match the page, only when it differs from the phone's setting.
+    private var windowStyle: UIUserInterfaceStyle {
+        guard readerArticle == nil else { return .unspecified }
+        let pageIsDark = PageColor.isDark(topColor)
+        return pageIsDark == store.systemIsDark ? .unspecified : (pageIsDark ? .dark : .light)
+    }
+
+    /// A short soft blend under the status bar so the edge doesn't look cut.
+    private var topFade: some View {
+        LinearGradient(colors: [Color(uiColor: topColor).opacity(0.85), Color(uiColor: topColor).opacity(0)],
+                       startPoint: .top, endPoint: .bottom)
+            .frame(height: 6)
+            .allowsHitTesting(false)
+    }
+
+    /// Full floating toolbar, or a slim address line in the home-indicator strip.
     private var bottomBar: some View {
         Group {
-            if controller.isToolbarCollapsed && !isEditing {
+            if collapsed {
                 compactBar
                     .transition(.opacity)
             } else {
                 toolbar
                     .padding(.horizontal, 12)
-                    .padding(.top, 8)
+                    .padding(.top, 6)
                     .padding(.bottom, 2)
                     .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider().opacity(0.5) }
-        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: controller.isToolbarCollapsed)
-    }
-
-    // MARK: - Pieces
-
-    @ViewBuilder
-    private var progressBar: some View {
-        if controller.isLoading {
-            GeometryReader { geometry in
-                Capsule()
-                    .fill(LinearGradient.neutrin)
-                    .frame(width: max(geometry.size.width * controller.progress, 24), height: 3)
-                    .animation(.easeOut(duration: 0.2), value: controller.progress)
-            }
-            .frame(height: 3)
-            .transition(.opacity)
-        }
+        .environment(\.colorScheme, PageColor.isDark(bottomColor) ? .dark : .light)
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: collapsed)
     }
 
     /// Slim address line shown while scrolling down; tap to bring the toolbar back.
@@ -97,8 +125,9 @@ struct BrowserView: View {
                     .lineLimit(1)
             }
             .font(.caption.weight(.semibold))
-            .frame(maxWidth: .infinity)
-            .frame(height: 26)
+            .padding(.top, 6)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .frame(height: 34)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -373,5 +402,29 @@ struct WebViewContainer: UIViewRepresentable {
             webView.topAnchor.constraint(equalTo: container.topAnchor),
             webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
+    }
+}
+
+/// Sets the window's light/dark style (this is what colors the clock and battery).
+private struct WindowAppearance: UIViewRepresentable {
+    let style: UIUserInterfaceStyle
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        let style = style
+        DispatchQueue.main.async {
+            if view.window?.overrideUserInterfaceStyle != style {
+                view.window?.overrideUserInterfaceStyle = style
+            }
+        }
+    }
+
+    static func dismantleUIView(_ view: UIView, coordinator: ()) {
+        view.window?.overrideUserInterfaceStyle = .unspecified
     }
 }

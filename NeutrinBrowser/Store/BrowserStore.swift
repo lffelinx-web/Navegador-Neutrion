@@ -156,6 +156,7 @@ final class BrowserStore: ObservableObject {
         guard systemIsDark != isDark else { return }
         let before = websiteDarkModeActive
         systemIsDark = isDark
+        controllers.values.forEach { $0.setSystemAppearance(isDark: isDark) }
         if before != websiteDarkModeActive { refreshDarkMode() }
     }
 

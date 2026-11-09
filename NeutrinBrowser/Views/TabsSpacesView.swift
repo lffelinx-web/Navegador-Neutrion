@@ -6,8 +6,9 @@ struct TabsSpacesView: View {
     /// Closes the screen (it's shown as an overlay so the page stays visible behind it).
     var onClose: () -> Void
 
-    @Namespace private var modeNamespace
     @State private var dragOffset: CGFloat = 0
+    /// Finger position while dragging the glass drop across the island.
+    @State private var dropletX: CGFloat?
 
     @State private var mode: Mode = .tabs
     @State private var isSearching = false
@@ -16,7 +17,25 @@ struct TabsSpacesView: View {
     @State private var editingSpace: BrowserSpace?
     @State private var spacePendingDeletion: BrowserSpace?
 
-    private enum Mode { case tabs, privateTabs, spaces }
+    private enum Mode: Int, CaseIterable {
+        case tabs, privateTabs, spaces
+
+        var title: String {
+            switch self {
+            case .tabs: "Pestañas"
+            case .privateTabs: "Privado"
+            case .spaces: "Espacios"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .tabs: "square.on.square"
+            case .privateTabs: "eye.slash"
+            case .spaces: "square.stack.3d.up"
+            }
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -131,36 +150,64 @@ struct TabsSpacesView: View {
             }
     }
 
-    /// Floating island with a glass "droplet" that slides to the selected option.
+    /// Floating island with a glass drop that you can tap or drag between options,
+    /// like the iOS 26 tab bars (WhatsApp, Música…).
     private var modePicker: some View {
-        HStack(spacing: 4) {
-            modeButton(.tabs, title: "Pestañas", symbol: "square.on.square")
-            modeButton(.privateTabs, title: "Privado", symbol: "eye.slash")
-            modeButton(.spaces, title: "Espacios", symbol: "square.stack.3d.up")
+        GeometryReader { geometry in
+            let inset: CGFloat = 4
+            let width = geometry.size.width - inset * 2
+            let segment = width / CGFloat(Mode.allCases.count)
+            let restingX = segment * (CGFloat(mode.rawValue) + 0.5)
+            let x = dropletX ?? restingX
+            let isDragging = dropletX != nil
+
+            ZStack(alignment: .leading) {
+                if !isDragging { droplet(width: segment, x: x, lifted: false) }
+                HStack(spacing: 0) {
+                    ForEach(Mode.allCases, id: \.self) { item in
+                        let selected = item == mode
+                        Label(item.title, systemImage: item.symbol)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .foregroundStyle(selected ? Color.neutrinBlue : Color.primary)
+                            .frame(width: segment, height: 40)
+                            .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+                    }
+                }
+                // While dragging, the drop floats above the labels like a magnifying lens.
+                if isDragging { droplet(width: segment, x: x, lifted: true) }
+            }
+            .padding(inset)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let position = value.location.x - inset
+                        withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.8)) {
+                            dropletX = min(max(position, segment / 2), width - segment / 2)
+                        }
+                    }
+                    .onEnded { value in
+                        let index = Int(((value.location.x - inset) / segment).rounded(.down))
+                        let target = Mode(rawValue: min(max(index, 0), Mode.allCases.count - 1)) ?? mode
+                        withAnimation(.spring(response: 0.38, dampingFraction: 0.68)) {
+                            mode = target
+                            dropletX = nil
+                        }
+                    }
+            )
         }
-        .padding(4)
+        .frame(height: 48)
         .glass(cornerRadius: 24)
     }
 
-    private func modeButton(_ value: Mode, title: String, symbol: String) -> some View {
-        let selected = mode == value
-        return Button {
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) { mode = value }
-        } label: {
-            Label(title, systemImage: symbol)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(selected ? Color.neutrinBlue : Color.primary)
-                .frame(maxWidth: .infinity)
-                .frame(height: 40)
-                .background {
-                    if selected {
-                        SelectionDroplet()
-                            .matchedGeometryEffect(id: "droplet", in: modeNamespace)
-                    }
-                }
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
+    private func droplet(width: CGFloat, x: CGFloat, lifted: Bool) -> some View {
+        SelectionDroplet(lifted: lifted)
+            .frame(width: width, height: 40)
+            .scaleEffect(lifted ? 1.15 : 1)
+            .offset(x: x - width / 2)
+            .allowsHitTesting(false)
     }
 
     // MARK: - Tabs mode
@@ -508,14 +555,27 @@ private struct TabCard: View {
 }
 
 /// The selected segment: a liquid-glass drop on iOS 26, a tinted capsule before.
+/// "Lifted" is the clear lens shown while the finger drags it.
 private struct SelectionDroplet: View {
+    let lifted: Bool
+
     var body: some View {
         if #available(iOS 26.0, *) {
-            Capsule()
-                .fill(Color.neutrinBlue.opacity(0.12))
-                .glassEffect(.regular.tint(Color.neutrinBlue.opacity(0.18)).interactive(), in: Capsule())
+            if lifted {
+                Capsule()
+                    .fill(Color.white.opacity(0.01))
+                    .glassEffect(.clear.interactive(), in: Capsule())
+                    .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+            } else {
+                Capsule()
+                    .fill(Color.neutrinBlue.opacity(0.10))
+                    .glassEffect(.regular.tint(Color.neutrinBlue.opacity(0.15)).interactive(), in: Capsule())
+            }
         } else {
-            Capsule().fill(Color.neutrinBlue.opacity(0.16))
+            Capsule()
+                .fill(lifted ? Color.white.opacity(0.55) : Color.neutrinBlue.opacity(0.16))
+                .overlay(Capsule().strokeBorder(Color.white.opacity(lifted ? 0.9 : 0), lineWidth: 1))
+                .shadow(color: .black.opacity(lifted ? 0.15 : 0), radius: 10, y: 4)
         }
     }
 }

@@ -32,13 +32,18 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 store.checkForFilterListUpdates()
+                store.updateSystemAppearance(isDark: Self.systemIsDark)
             } else {
                 store.save()
             }
         }
-        .onAppear { store.updateSystemAppearance(isDark: colorScheme == .dark) }
-        .onChange(of: colorScheme) { _, scheme in
-            store.updateSystemAppearance(isDark: scheme == .dark)
-        }
+        // Read the phone's real appearance: the browser may tint its own window
+        // to match a dark or light page, which also changes `colorScheme`.
+        .onAppear { store.updateSystemAppearance(isDark: Self.systemIsDark) }
+        .onChange(of: colorScheme) { _, _ in store.updateSystemAppearance(isDark: Self.systemIsDark) }
+    }
+
+    private static var systemIsDark: Bool {
+        UIScreen.main.traitCollection.userInterfaceStyle == .dark
     }
 }

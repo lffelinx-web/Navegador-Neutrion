@@ -24,6 +24,9 @@ final class TabController: NSObject, ObservableObject {
     @Published private(set) var isToolbarCollapsed = false
     /// The page's theme color (or background), used behind the status bar.
     @Published private(set) var topBarColor: UIColor?
+    /// Colors at the very top and bottom of the visible page, sampled by NeutrinPageColors.js.
+    @Published private(set) var pageTopColor: UIColor?
+    @Published private(set) var pageBottomColor: UIColor?
 
     var onChange: ((TabController) -> Void)?
     var onVisit: ((TabController) -> Void)?
@@ -41,6 +44,7 @@ final class TabController: NSObject, ObservableObject {
         static let shields = "neutrinShields"
         static let reader = "neutrinReader"
         static let fullscreen = "neutrinFullscreen"
+        static let colors = "neutrinColors"
     }
 
     init(id: UUID, isPrivate: Bool, store: BrowserStore) {
@@ -62,6 +66,9 @@ final class TabController: NSObject, ObservableObject {
         contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.shields)
         contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.reader)
         contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.fullscreen)
+        contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.colors)
+        // Pages follow the phone's appearance even when the browser chrome is tinted.
+        webView.overrideUserInterfaceStyle = store.systemIsDark ? .dark : .light
         installUserScripts()
 
         webView.allowsBackForwardNavigationGestures = true
@@ -139,6 +146,10 @@ final class TabController: NSObject, ObservableObject {
             ))
         }
         contentController.addUserScript(WKUserScript(
+            source: ScriptLibrary.pageColors,
+            injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient
+        ))
+        contentController.addUserScript(WKUserScript(
             source: ScriptLibrary.fullscreen,
             injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .defaultClient
         ))
@@ -180,6 +191,10 @@ final class TabController: NSObject, ObservableObject {
     }
 
     // MARK: - Toolbar & fullscreen
+
+    func setSystemAppearance(isDark: Bool) {
+        webView.overrideUserInterfaceStyle = isDark ? .dark : .light
+    }
 
     func setToolbarCollapsed(_ collapsed: Bool) {
         if isToolbarCollapsed != collapsed { isToolbarCollapsed = collapsed }
@@ -237,10 +252,10 @@ final class TabController: NSObject, ObservableObject {
             // Unknown size (0) is treated as a normal wide video.
             guard !forcedLandscape, aspectRatio == 0 || aspectRatio > 1.05 else { return }
             forcedLandscape = true
-            DeviceOrientation.request(.landscapeRight)
+            DeviceOrientation.set(.landscape)
         } else if forcedLandscape {
             forcedLandscape = false
-            DeviceOrientation.request(.portrait)
+            DeviceOrientation.restorePortrait()
         }
     }
 
@@ -285,6 +300,13 @@ final class TabController: NSObject, ObservableObject {
             guard !fresh.isEmpty else { return }
             blockedItems.append(contentsOf: fresh)
             onBlocked?(fresh)
+        case MessageName.colors:
+            guard let body = message.body as? [String: Any] else { return }
+            let inverted = body["inverted"] as? Bool ?? false
+            let top = (body["top"] as? String).flatMap { PageColor.parse($0, inverted: inverted) }
+            let bottom = (body["bottom"] as? String).flatMap { PageColor.parse($0, inverted: inverted) }
+            if let top, top != pageTopColor { pageTopColor = top }
+            if let bottom, bottom != pageBottomColor { pageBottomColor = bottom }
         case MessageName.fullscreen:
             if let body = message.body as? [String: Any], let active = body["active"] as? Bool {
                 videoFullscreenChanged(active: active, aspectRatio: (body["ratio"] as? Double) ?? 0)
@@ -423,6 +445,7 @@ enum ScriptLibrary {
     static let shieldsReport = file("NeutrinShields")
     static let globalPrivacyControl = file("NeutrinGPC")
     static let fullscreen = file("NeutrinFullscreen")
+    static let pageColors = file("NeutrinPageColors")
     static let reader = [file("Readability"), file("Readability-readerable"), file("NeutrinReader")].joined(separator: "\n;\n")
 
     static func darkMode(enabled: Bool) -> String {
@@ -433,11 +456,46 @@ enum ScriptLibrary {
 /// Rotates the app's window, e.g. into landscape for a fullscreen video.
 @MainActor
 enum DeviceOrientation {
-    static func request(_ orientations: UIInterfaceOrientationMask) {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }) else { return }
-        scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: orientations)) { _ in }
+    /// Lets the app use `orientations` and rotates to them. Because the app only
+    /// *allows* landscape during fullscreen video, iOS has to come back to portrait
+    /// afterwards even if a single rotation request gets lost.
+    static func set(_ orientations: UIInterfaceOrientationMask) {
+        AppDelegate.allowedOrientations = orientations
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            for window in scene.windows {
+                window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            }
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: orientations)) { _ in }
+        }
+    }
+
+    /// Back to portrait, retried once in case the fullscreen player was still closing.
+    static func restorePortrait() {
+        set(.portrait)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            if AppDelegate.allowedOrientations == .portrait { set(.portrait) }
+        }
+    }
+}
+
+/// Turns a CSS color ("rgb(12, 34, 56)") into a UIColor.
+enum PageColor {
+    static func parse(_ css: String, inverted: Bool) -> UIColor? {
+        let numbers = css.split(whereSeparator: { !"0123456789.".contains($0) }).compactMap { Double($0) }
+        guard numbers.count >= 3 else { return nil }
+        if numbers.count >= 4, numbers[3] < 0.5 { return nil } // mostly transparent
+        let color = UIColor(red: numbers[0] / 255, green: numbers[1] / 255, blue: numbers[2] / 255, alpha: 1)
+        guard inverted else { return color }
+        // Website dark mode inverts the page; flip the brightness the same way.
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        color.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        return UIColor(hue: hue, saturation: saturation, brightness: 1 - brightness, alpha: 1)
+    }
+
+    static func isDark(_ color: UIColor) -> Bool {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5
     }
 }

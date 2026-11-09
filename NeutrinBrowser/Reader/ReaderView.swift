@@ -4,22 +4,20 @@ import WebKit
 /// Distraction-free article view, styled like the Neutrin concept.
 struct ReaderView: View {
     @EnvironmentObject private var store: BrowserStore
-    @Environment(\.dismiss) private var dismiss
     let article: ReaderArticle
+    let onClose: () -> Void
     let onOpenLink: (URL) -> Void
 
     @State private var showSettings = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            ReaderWebView(article: article, settings: store.readerSettings, ruleLists: store.activeRuleLists) { url in
-                dismiss()
-                onOpenLink(url)
-            }
-            .ignoresSafeArea(edges: .bottom)
+            ReaderWebView(article: article, settings: store.readerSettings, ruleLists: store.activeRuleLists,
+                          onOpenLink: onOpenLink)
+                .ignoresSafeArea(edges: .bottom)
 
             HStack(spacing: 2) {
-                Button { dismiss() } label: {
+                Button(action: onClose) {
                     Label("Listo", systemImage: "xmark")
                         .labelStyle(.iconOnly)
                         .font(.system(size: 17, weight: .medium))
@@ -55,7 +53,7 @@ struct ReaderView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 6)
         }
-        .background(Color(.systemBackground))
+        .background(Color(.systemBackground).ignoresSafeArea())
     }
 }
 

@@ -38,14 +38,16 @@ struct BrowserView: View {
     private var ignoredEdges: Edge.Set {
         var edges: Edge.Set = []
         if Self.pageUnderStatusBar { edges.insert(.top) }
-        // When collapsed, the address line moves into the home-indicator strip, like Safari.
-        if collapsed { edges.insert(.bottom) }
+        // The toolbar sits just above the home indicator (and the collapsed address line
+        // inside its strip), like Safari, instead of leaving the whole strip empty.
+        edges.insert(.bottom)
         return edges
     }
 
     var body: some View {
         GeometryReader { outer in
             let safeTop = outer.safeAreaInsets.top
+            let safeBottom = outer.safeAreaInsets.bottom
             // The page never goes under the toolbar, so sites' bottom bars stay visible.
             VStack(spacing: 0) {
                 WebViewContainer(webView: controller.webView)
@@ -57,7 +59,7 @@ struct BrowserView: View {
                     .overlay(alignment: .top) {
                         progressBar.padding(.top, Self.pageUnderStatusBar ? safeTop : 0)
                     }
-                bottomBar
+                bottomBar(safeBottom: safeBottom)
             }
             .ignoresSafeArea(.container, edges: ignoredEdges)
             .onAppear { controller.setObscuredTop(Self.pageUnderStatusBar ? safeTop : 0) }
@@ -117,16 +119,18 @@ struct BrowserView: View {
     }
 
     /// Full floating toolbar, or a slim address line in the home-indicator strip.
-    private var bottomBar: some View {
+    private func bottomBar(safeBottom: CGFloat) -> some View {
         Group {
             if collapsed {
                 compactBar
+                    .frame(height: max(safeBottom, 28))
                     .transition(.opacity)
             } else {
                 toolbar
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
-                    .padding(.bottom, 2)
+                    // Overlap most of the home-indicator strip, leaving room for the swipe.
+                    .padding(.bottom, max(safeBottom - 20, 8))
                     .transition(.opacity)
             }
         }
@@ -168,7 +172,7 @@ struct BrowserView: View {
             .font(.caption.weight(.semibold))
             .padding(.top, 6)
             .frame(maxWidth: .infinity, alignment: .top)
-            .frame(height: 34)
+            .frame(maxHeight: .infinity, alignment: .top)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -467,6 +471,14 @@ struct WebViewContainer: UIViewRepresentable {
 private struct WindowAppearance: UIViewRepresentable {
     let style: UIUserInterfaceStyle
 
+    /// Remembers the window: when the browser closes, the view has already left it,
+    /// and without this the dark/light tint would stay on the whole app.
+    final class Coordinator {
+        weak var window: UIWindow?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
         view.isUserInteractionEnabled = false
@@ -475,14 +487,18 @@ private struct WindowAppearance: UIViewRepresentable {
 
     func updateUIView(_ view: UIView, context: Context) {
         let style = style
+        let coordinator = context.coordinator
         DispatchQueue.main.async {
-            if view.window?.overrideUserInterfaceStyle != style {
-                view.window?.overrideUserInterfaceStyle = style
-            }
+            if let window = view.window { coordinator.window = window }
+            guard let window = coordinator.window, window.overrideUserInterfaceStyle != style else { return }
+            window.overrideUserInterfaceStyle = style
         }
     }
 
-    static func dismantleUIView(_ view: UIView, coordinator: ()) {
-        view.window?.overrideUserInterfaceStyle = .unspecified
+    static func dismantleUIView(_ view: UIView, coordinator: Coordinator) {
+        let window = coordinator.window ?? view.window
+        window?.overrideUserInterfaceStyle = .unspecified
+        // In case a pending update lands after this, clear it once more.
+        DispatchQueue.main.async { window?.overrideUserInterfaceStyle = .unspecified }
     }
 }

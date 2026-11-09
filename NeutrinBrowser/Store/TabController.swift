@@ -379,6 +379,12 @@ extension TabController: WKNavigationDelegate, WKUIDelegate {
             return
         }
 
+        // <a download> links (including blob: files made by the page).
+        if navigationAction.shouldPerformDownload {
+            decisionHandler(.download)
+            return
+        }
+
         if !url.isWebURL {
             let scheme = url.scheme?.lowercased() ?? ""
             let isInternalScheme = ["about", "blob", "data", "javascript", "file"].contains(scheme)
@@ -431,6 +437,68 @@ extension TabController: WKNavigationDelegate, WKUIDelegate {
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         sync()
+    }
+
+    /// Files the browser can't show (zip, apk…) or that the site marks as attachments
+    /// are downloaded instead.
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        let disposition = (navigationResponse.response as? HTTPURLResponse)?
+            .value(forHTTPHeaderField: "Content-Disposition")?.lowercased() ?? ""
+        if navigationResponse.isForMainFrame, disposition.hasPrefix("attachment") || !navigationResponse.canShowMIMEType {
+            decisionHandler(.download)
+            return
+        }
+        decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        DownloadManager.shared.start(download)
+    }
+
+    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        DownloadManager.shared.start(download)
+    }
+
+    /// Long-press on a link: open in a new / background / private tab, copy or share.
+    func webView(_ webView: WKWebView, contextMenuConfigurationForElement elementInfo: WKContextMenuElementInfo,
+                 completionHandler: @escaping (UIContextMenuConfiguration?) -> Void) {
+        guard let link = elementInfo.linkURL, link.isWebURL else {
+            completionHandler(nil) // images and other elements keep WebKit's own menu
+            return
+        }
+        let url = LinkCleaner.cleaned(link)
+        let isPrivate = self.isPrivate
+        let configuration = UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            var actions: [UIMenuElement] = []
+            actions.append(UIAction(title: "Abrir en pestaña nueva", image: UIImage(systemName: "plus.square.on.square")) { _ in
+                self?.store?.newTab(url: url, isPrivate: isPrivate)
+            })
+            actions.append(UIAction(title: "Abrir en segundo plano", image: UIImage(systemName: "square.on.square.dashed")) { _ in
+                self?.store?.addBackgroundTab(url: url, isPrivate: isPrivate)
+            })
+            if !isPrivate {
+                actions.append(UIAction(title: "Abrir en pestaña privada", image: UIImage(systemName: "eye.slash")) { _ in
+                    self?.store?.newTab(url: url, isPrivate: true)
+                })
+            }
+            let copy = UIAction(title: "Copiar enlace", image: UIImage(systemName: "link")) { _ in
+                UIPasteboard.general.url = url
+            }
+            let share = UIAction(title: "Compartir…", image: UIImage(systemName: "square.and.arrow.up")) { _ in
+                SharePresenter.share(url)
+            }
+            let download = UIAction(title: "Descargar archivo", image: UIImage(systemName: "arrow.down.circle")) { _ in
+                self?.webView.startDownload(using: URLRequest(url: url)) { download in
+                    DownloadManager.shared.start(download)
+                }
+            }
+            return UIMenu(title: url.displayHost, children: [
+                UIMenu(options: .displayInline, children: actions),
+                UIMenu(options: .displayInline, children: [copy, share, download]),
+            ])
+        }
+        completionHandler(configuration)
     }
 
     /// Links that ask for a new window (target="_blank") open in the same tab.
@@ -577,5 +645,19 @@ enum PageColor {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         color.getRed(&r, green: &g, blue: &b, alpha: &a)
         return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5
+    }
+}
+
+/// Presents the system share sheet from the top-most screen.
+@MainActor
+enum SharePresenter {
+    static func share(_ url: URL) {
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+              var top = scene.keyWindow?.rootViewController else { return }
+        while let presented = top.presentedViewController { top = presented }
+        let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        sheet.popoverPresentationController?.sourceView = top.view
+        top.present(sheet, animated: true)
     }
 }

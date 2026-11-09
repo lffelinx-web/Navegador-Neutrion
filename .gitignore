@@ -16,3 +16,4 @@ SourcePackages/
 node_modules/
 ScriptTests/easylist.txt
 ScriptTests/easyprivacy.txt
+ScriptTests/easylist-cookie.txt

@@ -9,6 +9,7 @@ Un navegador para iOS, más tranquilo y **centrado en la privacidad**. Bloquea a
 | Función | Cómo funciona |
 |---|---|
 | **Shields: bloqueo de anuncios y rastreadores** | Dos niveles: **(1)** una lista propia de unos 190 servicios (DoubleClick, Taboola, Google Analytics, píxel de Meta…) que funciona sin conexión desde el primer momento; **(2)** las listas comunitarias **EasyList** (anuncios) y **EasyPrivacy** (rastreadores), con más de 100.000 reglas, que se **descargan y actualizan solas** cada 4 días. Todo se bloquea **antes de cargar** con las reglas nativas de WebKit (`WKContentRuleList`), y también se ocultan los huecos que dejan los anuncios. |
+| **Avisos de cookies** | La lista **EasyList Cookie** oculta los banners de "Aceptar cookies" y bloquea los scripts de consentimiento. Se activa o desactiva en Ajustes. |
 | **Panel de Shields** | El escudo de la barra de direcciones muestra qué se bloqueó en la página y permite apagar Shields en un sitio concreto (la página se recarga). |
 | **Estadísticas** | La página de inicio muestra cuántos anuncios y rastreadores se han bloqueado en total. |
 | **Enlaces limpios** | Quita parámetros de rastreo (`utm_*`, `fbclid`, `gclid`, `msclkid`…) de los enlaces que abres, compartes o guardas. |
@@ -26,6 +27,12 @@ Un navegador para iOS, más tranquilo y **centrado en la privacidad**. Bloquea a
 4. Las reglas que WebKit no puede expresar (expresiones regulares, filtros "procedurales", `$redirect`, `$csp`, `$popup`…) se omiten en lugar de adivinarlas.
 
 En **Ajustes → Filter Lists** puedes activar o desactivar cada lista, ver cuántas reglas tiene, cuándo se actualizó y forzar una actualización.
+
+## Navegación
+
+- **Sugerencias al escribir:** coincidencias de favoritos e historial mientras escribes una dirección o búsqueda.
+- **Mantener presionado un enlace:** abrir en pestaña nueva, en segundo plano o privada; copiar, compartir o descargar.
+- **Descargas:** los archivos se guardan en *Archivos › En mi iPhone › Neutrin › Descargas*; lista con vista previa en ⋯ → Descargas.
 
 ## Lectura y apariencia
 

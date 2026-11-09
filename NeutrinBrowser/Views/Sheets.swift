@@ -171,10 +171,11 @@ struct SettingsView: View {
                     Toggle("Ocultar huecos de anuncios", isOn: $store.privacySettings.hideAdPlaceholders)
                         .disabled(!store.privacySettings.blockAds)
                     Toggle("Bloquear rastreadores", isOn: $store.privacySettings.blockTrackers)
+                    Toggle("Ocultar avisos de cookies", isOn: $store.privacySettings.blockCookieNotices)
                     NavigationLink {
                         FilterListsView(manager: store.filterLists)
                     } label: {
-                        LabeledContent("Listas de filtros", value: "EasyList, EasyPrivacy")
+                        LabeledContent("Listas de filtros", value: "EasyList y más")
                     }
                 } header: {
                     Text("Shields")

@@ -101,7 +101,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(out.blockDomains.includes("tracker.io") && !out.blockDomains.includes("frames.example"), "plain domains exported for the report");
 
   // Real lists, if downloaded next to the tests (see README).
-  for (const name of ["easylist", "easyprivacy"]) {
+  for (const name of ["easylist", "easyprivacy", "easylist-cookie"]) {
     const file = require("path").join(__dirname, `${name}.txt`);
     if (!fs.existsSync(file)) continue;
     const real = JSON.parse(neutrinConvertFilterList(fs.readFileSync(file, "utf8")));

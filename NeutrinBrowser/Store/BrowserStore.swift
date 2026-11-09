@@ -176,7 +176,8 @@ final class BrowserStore: ObservableObject {
         }
         if old.blockAds != privacySettings.blockAds
             || old.blockTrackers != privacySettings.blockTrackers
-            || old.hideAdPlaceholders != privacySettings.hideAdPlaceholders {
+            || old.hideAdPlaceholders != privacySettings.hideAdPlaceholders
+            || old.blockCookieNotices != privacySettings.blockCookieNotices {
             refreshShields()
         }
     }
@@ -248,6 +249,42 @@ final class BrowserStore: ObservableObject {
         tabs.append(record)
         select(record.id)
         return record.id
+    }
+
+    /// Adds a tab next to the current one without switching to it.
+    func addBackgroundTab(url: URL, isPrivate: Bool) {
+        let record = TabRecord(spaceID: activeSpaceID, url: url, isPrivate: isPrivate)
+        if let index = tabs.firstIndex(where: { $0.id == activeTabID }) {
+            tabs.insert(record, at: index + 1)
+        } else {
+            tabs.append(record)
+        }
+    }
+
+    /// Favorites and history entries matching what the user is typing.
+    func suggestions(for query: String, limit: Int = 6) -> [HistoryEntry] {
+        let text = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !text.isEmpty else { return [] }
+        let candidates = favorites.map { HistoryEntry(title: $0.title, url: $0.url) } + history
+        var seen = Set<String>()
+        var results: [(score: Int, entry: HistoryEntry)] = []
+        for entry in candidates {
+            let key = entry.url.absoluteString.lowercased()
+            guard seen.insert(key).inserted else { continue }
+            let host = entry.url.displayHost.lowercased()
+            let title = entry.title.lowercased()
+            let score: Int
+            if host.hasPrefix(text) { score = 3 }
+            else if title.hasPrefix(text) || title.contains(" " + text) { score = 2 }
+            else if key.contains(text) || title.contains(text) { score = 1 }
+            else { continue }
+            results.append((score, entry))
+        }
+        // Stable sort keeps favorites first, then most recent history.
+        return results.enumerated()
+            .sorted { $0.element.score != $1.element.score ? $0.element.score > $1.element.score : $0.offset < $1.offset }
+            .prefix(limit)
+            .map { $0.element.entry }
     }
 
     func select(_ tabID: UUID) {

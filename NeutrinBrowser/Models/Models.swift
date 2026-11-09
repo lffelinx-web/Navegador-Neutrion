@@ -139,6 +139,7 @@ struct PrivacySettings: Codable, Equatable {
     var removeTrackingParameters = true
     var globalPrivacyControl = true
     var upgradeToHTTPS = true
+    var blockCookieNotices = true
     var websiteDarkMode: WebsiteDarkMode = .matchSystem
 
     init() {}
@@ -152,6 +153,7 @@ struct PrivacySettings: Codable, Equatable {
         removeTrackingParameters = try c.decodeIfPresent(Bool.self, forKey: .removeTrackingParameters) ?? defaults.removeTrackingParameters
         globalPrivacyControl = try c.decodeIfPresent(Bool.self, forKey: .globalPrivacyControl) ?? defaults.globalPrivacyControl
         upgradeToHTTPS = try c.decodeIfPresent(Bool.self, forKey: .upgradeToHTTPS) ?? defaults.upgradeToHTTPS
+        blockCookieNotices = try c.decodeIfPresent(Bool.self, forKey: .blockCookieNotices) ?? defaults.blockCookieNotices
         websiteDarkMode = try c.decodeIfPresent(WebsiteDarkMode.self, forKey: .websiteDarkMode) ?? defaults.websiteDarkMode
     }
 }

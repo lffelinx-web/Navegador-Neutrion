@@ -15,6 +15,14 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 26) {
                     header
                     searchBar
+                    if searchFocused && !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                        SuggestionsList(query: query, onOpen: { url in
+                            query = ""
+                            searchFocused = false
+                            store.open(url)
+                        }, onSearch: submit)
+                        .transition(.opacity)
+                    }
                     if store.isPrivateBrowsing {
                         privateBanner
                     }

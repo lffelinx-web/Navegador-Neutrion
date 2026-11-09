@@ -197,7 +197,8 @@ final class ContentRuleCompilationTests: XCTestCase {
     /// Downloads the real lists; skipped when there's no network.
     func testRealEasyListsCompile() async throws {
         for (name, address) in [("easylist", "https://easylist.to/easylist/easylist.txt"),
-                                ("easyprivacy", "https://easylist.to/easylist/easyprivacy.txt")] {
+                                ("easyprivacy", "https://easylist.to/easylist/easyprivacy.txt"),
+                                ("easylist-cookie", "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt")] {
             var request = URLRequest(url: URL(string: address)!)
             request.timeoutInterval = 30
             guard let (data, response) = try? await URLSession.shared.data(for: request),

@@ -56,6 +56,7 @@ jobs:
         run: |
           curl -fsSL --retry 3 -o easylist.txt https://easylist.to/easylist/easylist.txt || echo "::warning::No se pudo descargar EasyList"
           curl -fsSL --retry 3 -o easyprivacy.txt https://easylist.to/easylist/easyprivacy.txt || echo "::warning::No se pudo descargar EasyPrivacy"
+          curl -fsSL --retry 3 -o easylist-cookie.txt https://secure.fanboy.co.nz/fanboy-cookiemonster.txt || echo "::warning::No se pudo descargar EasyList Cookie"
       - name: Probar scripts y conversor de listas
         working-directory: ScriptTests
         run: npm install --no-audit --no-fund && npm test

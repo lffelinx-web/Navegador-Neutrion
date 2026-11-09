@@ -8,11 +8,31 @@ import WebKit
 @MainActor
 final class FilterListManager: ObservableObject {
     struct Source: Identifiable {
+        enum Kind { case ads, trackers, cookieNotices }
+
         let id: String
         let name: String
         let summary: String
-        let category: Blocklist.Category
+        let kind: Kind
         let urls: [URL]
+
+        /// Which Shields setting turns this list on.
+        func isWanted(by settings: PrivacySettings) -> Bool {
+            switch kind {
+            case .ads: settings.blockAds
+            case .trackers: settings.blockTrackers
+            case .cookieNotices: settings.blockCookieNotices
+            }
+        }
+
+        /// Category used in the "blocked on this page" report (cookie lists aren't counted).
+        var reportCategory: Blocklist.Category? {
+            switch kind {
+            case .ads: .ads
+            case .trackers: .trackers
+            case .cookieNotices: nil
+            }
+        }
     }
 
     struct Subscription: Codable, Equatable {
@@ -31,16 +51,23 @@ final class FilterListManager: ObservableObject {
         Source(
             id: "easylist", name: "EasyList",
             summary: "Bloquea anuncios en sitios de todo el mundo.",
-            category: .ads,
+            kind: .ads,
             urls: [URL(string: "https://easylist.to/easylist/easylist.txt")!,
                    URL(string: "https://easylist-downloads.adblockplus.org/easylist.txt")!]
         ),
         Source(
             id: "easyprivacy", name: "EasyPrivacy",
             summary: "Bloquea scripts de rastreo, píxeles y analíticas.",
-            category: .trackers,
+            kind: .trackers,
             urls: [URL(string: "https://easylist.to/easylist/easyprivacy.txt")!,
                    URL(string: "https://easylist-downloads.adblockplus.org/easyprivacy.txt")!]
+        ),
+        Source(
+            id: "easylist-cookie", name: "EasyList Cookie",
+            summary: "Oculta los avisos de cookies y de consentimiento.",
+            kind: .cookieNotices,
+            urls: [URL(string: "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt")!,
+                   URL(string: "https://easylist-downloads.adblockplus.org/fanboy-cookiemonster.txt")!]
         ),
     ]
 
@@ -75,10 +102,9 @@ final class FilterListManager: ObservableObject {
     func ruleLists(for settings: PrivacySettings) -> [WKContentRuleList] {
         var lists: [WKContentRuleList] = []
         for source in Self.sources where subscription(source.id).isEnabled {
-            let wanted = source.category == .ads ? settings.blockAds : settings.blockTrackers
-            guard wanted else { continue }
+            guard source.isWanted(by: settings) else { continue }
             if let network = compiled[key(source.id, .network)] { lists.append(network) }
-            let hideElements = source.category == .ads ? settings.hideAdPlaceholders : true
+            let hideElements = source.kind == .ads ? settings.hideAdPlaceholders : true
             if hideElements, let cosmetic = compiled[key(source.id, .cosmetic)] { lists.append(cosmetic) }
         }
         return lists
@@ -88,11 +114,11 @@ final class FilterListManager: ObservableObject {
     func category(forHost host: String, settings: PrivacySettings) -> Blocklist.Category? {
         let suffixes = Blocklist.suffixes(of: host)
         for source in Self.sources where subscription(source.id).isEnabled {
-            guard source.category == .ads ? settings.blockAds : settings.blockTrackers,
+            guard source.isWanted(by: settings), let category = source.reportCategory,
                   let blocked = blockDomains[source.id] else { continue }
             let excepted = exceptionDomains[source.id] ?? []
             if suffixes.contains(where: { excepted.contains($0) }) { continue }
-            if suffixes.contains(where: { blocked.contains($0) }) { return source.category }
+            if suffixes.contains(where: { blocked.contains($0) }) { return category }
         }
         return nil
     }

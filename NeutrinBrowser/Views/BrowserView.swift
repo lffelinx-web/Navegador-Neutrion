@@ -11,12 +11,19 @@ struct BrowserView: View {
     @State private var addressText = ""
     @State private var showShields = false
     @State private var showReaderSettings = false
+    @State private var showDownloads = false
+    @ObservedObject private var downloads = DownloadManager.shared
     @State private var isOpeningReader = false
     @State private var readerFailed = false
     @State private var showSettings = false
     @FocusState private var addressFocused: Bool
 
     private var collapsed: Bool { controller.isToolbarCollapsed && !isEditing }
+
+    /// Show history/favorite matches once the user starts typing something new.
+    private var showSuggestions: Bool {
+        isEditing && !addressText.isEmpty && addressText != controller.url?.absoluteString
+    }
 
     /// Color behind the clock / Dynamic Island: whatever is at the top of the page.
     private var topColor: UIColor {
@@ -59,6 +66,28 @@ struct BrowserView: View {
                     .overlay(alignment: .top) {
                         progressBar.padding(.top, Self.pageUnderStatusBar ? safeTop : 0)
                     }
+                    .overlay(alignment: .bottom) {
+                        VStack(spacing: 8) {
+                            if showSuggestions {
+                                SuggestionsList(query: addressText, onOpen: { url in
+                                    isEditing = false
+                                    store.open(url)
+                                }, onSearch: {
+                                    let text = addressText
+                                    isEditing = false
+                                    store.open(text)
+                                })
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                            if !isEditing {
+                                DownloadBanner(downloads: downloads) { showDownloads = true }
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                        .animation(.snappy, value: showSuggestions)
+                        .animation(.snappy, value: downloads.latest?.id)
+                    }
                 bottomBar(safeBottom: safeBottom)
             }
             .ignoresSafeArea(.container, edges: ignoredEdges)
@@ -86,6 +115,9 @@ struct BrowserView: View {
         .onChange(of: store.readerSettings) { _, settings in
             controller.applyReaderSettings(settings)
         }
+        .sheet(isPresented: $showDownloads) {
+            DownloadsView(downloads: downloads)
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(store)
         }
@@ -101,7 +133,7 @@ struct BrowserView: View {
     /// setting, and never while Pestañas y espacios is open on top.
     private var windowStyle: UIUserInterfaceStyle {
         // Sheets (Shields, Ajustes, texto) and Pestañas y espacios keep the phone's normal look.
-        guard !showTabs, !showShields, !showSettings, !showReaderSettings, !isEditing else { return .unspecified }
+        guard !showTabs, !showShields, !showSettings, !showReaderSettings, !showDownloads, !isEditing else { return .unspecified }
         let pageIsDark = PageColor.isDark(topColor)
         return pageIsDark == store.systemIsDark ? .unspecified : (pageIsDark ? .dark : .light)
     }
@@ -130,7 +162,7 @@ struct BrowserView: View {
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
                     // Overlap most of the home-indicator strip, leaving room for the swipe.
-                    .padding(.bottom, max(safeBottom - 20, 8))
+                    .padding(.bottom, max(safeBottom - 10, 10))
                     .transition(.opacity)
             }
         }
@@ -380,6 +412,9 @@ struct BrowserView: View {
             }
             Button { store.goHome() } label: {
                 Label("Página de inicio", systemImage: "house")
+            }
+            Button { showDownloads = true } label: {
+                Label("Descargas", systemImage: "arrow.down.circle")
             }
             Button { showSettings = true } label: {
                 Label("Ajustes", systemImage: "gearshape")

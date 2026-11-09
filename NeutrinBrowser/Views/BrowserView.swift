@@ -71,7 +71,8 @@ struct BrowserView: View {
     /// Light or dark window chrome to match the page, only when it differs from the phone's
     /// setting, and never while Pestañas y espacios is open on top.
     private var windowStyle: UIUserInterfaceStyle {
-        guard !showTabs else { return .unspecified }
+        // Sheets (Shields, Ajustes, texto) and Pestañas y espacios keep the phone's normal look.
+        guard !showTabs, !showShields, !showSettings, !showReaderSettings, !isEditing else { return .unspecified }
         let pageIsDark = PageColor.isDark(topColor)
         return pageIsDark == store.systemIsDark ? .unspecified : (pageIsDark ? .dark : .light)
     }

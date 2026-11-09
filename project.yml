@@ -26,7 +26,7 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.lfaz.neutrin
+        PRODUCT_BUNDLE_IDENTIFIER: com.neutrin.browser.ios
         TARGETED_DEVICE_FAMILY: '1'
         INFOPLIST_FILE: NeutrinBrowser/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

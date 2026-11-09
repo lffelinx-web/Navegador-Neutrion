@@ -13,7 +13,7 @@ platform :ios do
     # in the `certificados` branch so every run reuses them instead of creating new ones.
     match(
       type: "appstore",
-      app_identifier: "com.lfaz.neutrin",
+      app_identifier: "com.neutrin.browser.ios",
       team_id: ENV["APPLE_TEAM_ID"],
       api_key: api_key,
       storage_mode: "git",
@@ -28,7 +28,7 @@ platform :ios do
       use_automatic_signing: false,
       team_id: ENV["APPLE_TEAM_ID"],
       code_sign_identity: "Apple Distribution",
-      profile_name: ENV["sigh_com.lfaz.neutrin_appstore_profile-name"]
+      profile_name: ENV["sigh_com.neutrin.browser.ios_appstore_profile-name"]
     )
     build_app(
       project: "NeutrinBrowser.xcodeproj",

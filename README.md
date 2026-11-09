@@ -63,7 +63,7 @@ El proyecto de Xcode no se guarda en el repositorio, se genera desde `project.ym
 - **scripts:** prueba los scripts de las páginas y el conversor de listas con Node, usando las listas EasyList y EasyPrivacy reales.
 - **testflight** (solo en `main`): firma la app con fastlane `match` (el certificado se guarda en la rama `certificados`) y la sube a TestFlight. Necesita estos secrets del repositorio: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` y `APPLE_TEAM_ID`.
 
-Antes de la primera subida, la app tiene que existir en App Store Connect con el bundle ID **`com.lfaz.neutrin`**.
+Antes de la primera subida, la app tiene que existir en App Store Connect con el bundle ID **`com.neutrin.browser.ios`**.
 
 ## Estructura
 

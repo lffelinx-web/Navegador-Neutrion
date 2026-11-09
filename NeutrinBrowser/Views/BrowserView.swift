@@ -10,13 +10,13 @@ struct BrowserView: View {
     @State private var isEditing = false
     @State private var addressText = ""
     @State private var showShields = false
-    @State private var readerArticle: ReaderArticle?
+    @State private var showReaderSettings = false
     @State private var isOpeningReader = false
     @State private var readerFailed = false
     @State private var showSettings = false
     @FocusState private var addressFocused: Bool
 
-    private var collapsed: Bool { controller.isToolbarCollapsed && !isEditing && readerArticle == nil }
+    private var collapsed: Bool { controller.isToolbarCollapsed && !isEditing }
 
     /// Color behind the clock / Dynamic Island: whatever is at the top of the page.
     private var topColor: UIColor {
@@ -34,33 +34,29 @@ struct BrowserView: View {
         VStack(spacing: 0) {
             WebViewContainer(webView: controller.webView)
                 .overlay(alignment: .top) { progressBar }
-                .overlay(alignment: .top) { topFade }
             bottomBar
         }
         // When collapsed, the address line moves into the home-indicator strip, like Safari.
         .ignoresSafeArea(.container, edges: collapsed ? .bottom : [])
         .background {
             VStack(spacing: 0) {
-                Color(uiColor: topColor)
+                statusBarBackground
                 Color(uiColor: bottomColor)
             }
             .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.25), value: topColor)
-            .animation(.easeInOut(duration: 0.25), value: bottomColor)
+            .animation(.easeInOut(duration: 0.3), value: topColor)
+            .animation(.easeInOut(duration: 0.3), value: bottomColor)
         }
-        // Clock and battery switch to light text on dark pages.
+        // Clock and battery switch to light text on dark pages (only while browsing).
         .background(WindowAppearance(style: windowStyle))
-        .overlay {
-            if let article = readerArticle {
-                ReaderView(article: article, onClose: closeReader) { url in
-                    closeReader()
-                    store.open(url)
-                }
-                .transition(.move(edge: .bottom))
-                .zIndex(1)
-            }
+        .sheet(isPresented: $showReaderSettings) {
+            ReaderSettingsPanel(settings: $store.readerSettings)
+                .presentationDetents([.height(260)])
+                .presentationDragIndicator(.visible)
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: readerArticle?.id)
+        .onChange(of: store.readerSettings) { _, settings in
+            controller.applyReaderSettings(settings)
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(store)
         }
@@ -72,23 +68,24 @@ struct BrowserView: View {
         }
     }
 
-    private func closeReader() {
-        readerArticle = nil
-    }
-
-    /// Light or dark window chrome to match the page, only when it differs from the phone's setting.
+    /// Light or dark window chrome to match the page, only when it differs from the phone's
+    /// setting, and never while Pestañas y espacios is open on top.
     private var windowStyle: UIUserInterfaceStyle {
-        guard readerArticle == nil else { return .unspecified }
+        guard !showTabs else { return .unspecified }
         let pageIsDark = PageColor.isDark(topColor)
         return pageIsDark == store.systemIsDark ? .unspecified : (pageIsDark ? .dark : .light)
     }
 
-    /// A short soft blend under the status bar so the edge doesn't look cut.
-    private var topFade: some View {
-        LinearGradient(colors: [Color(uiColor: topColor).opacity(0.85), Color(uiColor: topColor).opacity(0)],
-                       startPoint: .top, endPoint: .bottom)
-            .frame(height: 6)
-            .allowsHitTesting(false)
+    /// The page's top color, frosted towards the top of the screen so the clock area
+    /// blends in instead of looking like a flat band.
+    private var statusBarBackground: some View {
+        Color(uiColor: topColor)
+            .overlay {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .mask(LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom))
+                    .opacity(0.6)
+            }
     }
 
     /// Full floating toolbar, or a slim address line in the home-indicator strip.
@@ -231,7 +228,16 @@ struct BrowserView: View {
             }
             .accessibilityLabel("Dirección: \(controller.url?.displayHost ?? "")")
 
-            if controller.isReaderAvailable {
+            if controller.isReaderActive {
+                Button { showReaderSettings = true } label: {
+                    Image(systemName: "textformat.size")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.neutrinBlue)
+                        .frame(width: 32, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Ajustes de texto")
+            } else if controller.isReaderAvailable {
                 Button(action: openReader) {
                     Group {
                         if isOpeningReader {
@@ -254,6 +260,7 @@ struct BrowserView: View {
         .foregroundStyle(.primary)
         .background(Color(.systemBackground).opacity(0.55), in: Capsule())
         .animation(.snappy, value: controller.isReaderAvailable)
+        .animation(.snappy, value: controller.isReaderActive)
     }
 
     private var editingField: some View {
@@ -310,7 +317,14 @@ struct BrowserView: View {
                     Label("Copiar enlace", systemImage: "link")
                 }
             }
-            if controller.isReaderAvailable {
+            if controller.isReaderActive {
+                Button { controller.exitReader() } label: {
+                    Label("Salir del modo lectura", systemImage: "doc.plaintext.fill")
+                }
+                Button { showReaderSettings = true } label: {
+                    Label("Ajustes de texto", systemImage: "textformat.size")
+                }
+            } else if controller.isReaderAvailable {
                 Button(action: openReader) {
                     Label("Modo lectura", systemImage: "doc.plaintext")
                 }
@@ -354,7 +368,7 @@ struct BrowserView: View {
             let article = await controller.extractArticle()
             isOpeningReader = false
             if let article {
-                readerArticle = article
+                controller.showReader(article, settings: store.readerSettings)
             } else {
                 readerFailed = true
             }

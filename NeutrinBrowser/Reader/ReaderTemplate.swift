@@ -21,7 +21,7 @@ enum ReaderTemplate {
 
         return """
         <!doctype html>
-        <html lang="es" data-theme="\(settings.theme.rawValue)" data-font="\(settings.font.rawValue)" style="--font-size:\(Int(settings.fontSize))px">
+        <html lang="es" data-neutrin-reader="1" data-theme="\(settings.theme.rawValue)" data-font="\(settings.font.rawValue)" style="--font-size:\(Int(settings.fontSize))px">
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">

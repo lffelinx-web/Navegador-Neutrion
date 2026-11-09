@@ -16,9 +16,30 @@
   document.addEventListener("fullscreenchange", onElementFullscreen);
   document.addEventListener("webkitfullscreenchange", onElementFullscreen);
 
+  // Leaving fullscreen (and rotating back) can pause the video. If it was playing
+  // a moment ago, keep it playing.
+  let lastPlaying = 0;
+  document.addEventListener("timeupdate", (event) => {
+    if (event.target && !event.target.paused) lastPlaying = Date.now();
+  }, true);
+  function resumeIfNeeded(video) {
+    if (!video || Date.now() - lastPlaying > 1500) return;
+    for (const delay of [350, 900]) {
+      setTimeout(() => { if (video.paused && !video.ended) video.play().catch(() => {}); }, delay);
+    }
+  }
+  const onElementExit = () => {
+    if (!(document.fullscreenElement || document.webkitFullscreenElement)) resumeIfNeeded(document.querySelector("video"));
+  };
+  document.addEventListener("fullscreenchange", onElementExit);
+  document.addEventListener("webkitfullscreenchange", onElementExit);
+
   // Native player events fire on the <video> itself; listen in the capture phase.
   document.addEventListener("webkitbeginfullscreen", (event) => report(true, event.target), true);
-  document.addEventListener("webkitendfullscreen", (event) => report(false, event.target), true);
+  document.addEventListener("webkitendfullscreen", (event) => {
+    report(false, event.target);
+    resumeIfNeeded(event.target);
+  }, true);
   document.addEventListener("webkitpresentationmodechanged", (event) => {
     const video = event.target;
     if (video && video.webkitPresentationMode) report(video.webkitPresentationMode === "fullscreen", video);

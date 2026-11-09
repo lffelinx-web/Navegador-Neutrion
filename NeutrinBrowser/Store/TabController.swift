@@ -19,12 +19,14 @@ final class TabController: NSObject, ObservableObject {
     /// Ads and trackers stopped on the current page.
     @Published private(set) var blockedItems: [BlockedItem] = []
     @Published private(set) var isReaderAvailable = false
+    /// The tab is showing the reader version of an article (loaded into this same web view).
+    @Published private(set) var isReaderActive = false
     @Published private(set) var hasOnlySecureContent = true
     /// The toolbar shrinks to a small address pill while the user scrolls down a page.
     @Published private(set) var isToolbarCollapsed = false
     /// The page's theme color (or background), used behind the status bar.
     @Published private(set) var topBarColor: UIColor?
-    /// Colors at the very top and bottom of the visible page, sampled by NeutrinPageColors.js.
+    /// Colors at the very top and bottom of the visible page, read from its pixels.
     @Published private(set) var pageTopColor: UIColor?
     @Published private(set) var pageBottomColor: UIColor?
 
@@ -35,6 +37,9 @@ final class TabController: NSObject, ObservableObject {
 
     private var observations: [NSKeyValueObservation] = []
     private var lastScrollY: CGFloat = 0
+    private var readerNavigation: WKNavigation?
+    private var readerReturnURL: URL?
+    private var colorSampleScheduled = false
     private var forcedLandscape = false
 
     /// Space left at the bottom of pages for the floating toolbar.
@@ -44,7 +49,6 @@ final class TabController: NSObject, ObservableObject {
         static let shields = "neutrinShields"
         static let reader = "neutrinReader"
         static let fullscreen = "neutrinFullscreen"
-        static let colors = "neutrinColors"
     }
 
     init(id: UUID, isPrivate: Bool, store: BrowserStore) {
@@ -66,7 +70,6 @@ final class TabController: NSObject, ObservableObject {
         contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.shields)
         contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.reader)
         contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.fullscreen)
-        contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.colors)
         // Pages follow the phone's appearance even when the browser chrome is tinted.
         webView.overrideUserInterfaceStyle = store.systemIsDark ? .dark : .light
         installUserScripts()
@@ -146,10 +149,6 @@ final class TabController: NSObject, ObservableObject {
             ))
         }
         contentController.addUserScript(WKUserScript(
-            source: ScriptLibrary.pageColors,
-            injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient
-        ))
-        contentController.addUserScript(WKUserScript(
             source: ScriptLibrary.fullscreen,
             injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .defaultClient
         ))
@@ -205,6 +204,7 @@ final class TabController: NSObject, ObservableObject {
     private func scrollViewDidScroll(_ scrollView: UIScrollView) {
         let y = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
         defer { lastScrollY = y }
+        scheduleColorSample()
         // Ignore programmatic scrolling (page loads, anchors) – only react to the user.
         guard scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating else { return }
         let bottom = scrollView.contentSize.height - scrollView.bounds.height
@@ -259,6 +259,68 @@ final class TabController: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Reader
+
+    /// Shows the article in this tab. Going back returns to the original page.
+    func showReader(_ article: ReaderArticle, settings: ReaderSettings) {
+        readerReturnURL = url
+        isReaderActive = true
+        readerNavigation = webView.loadHTMLString(ReaderTemplate.html(for: article, settings: settings),
+                                                  baseURL: article.url.map(LinkCleaner.cleaned))
+    }
+
+    func exitReader() {
+        guard isReaderActive else { return }
+        isReaderActive = false
+        if webView.canGoBack {
+            webView.goBack()
+        } else if let readerReturnURL {
+            load(readerReturnURL)
+        }
+    }
+
+    func applyReaderSettings(_ settings: ReaderSettings) {
+        guard isReaderActive else { return }
+        webView.evaluateJavaScript(ReaderTemplate.applySettingsScript(settings)) { _, _ in }
+    }
+
+    // MARK: - Page colors
+
+    /// Reads the colors at the top and bottom edge of the page from a tiny snapshot,
+    /// so it works on any site (and with website dark mode).
+    func scheduleColorSample(after delay: Double = 0.2) {
+        guard !colorSampleScheduled else { return }
+        colorSampleScheduled = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            self?.colorSampleScheduled = false
+            self?.sampleEdgeColors()
+        }
+    }
+
+    private func sampleEdgeColors() {
+        let bounds = webView.bounds
+        guard webView.window != nil, bounds.width > 0, bounds.height > 20, webView.url != nil else { return }
+        sampleColor(in: CGRect(x: 0, y: 0, width: bounds.width, height: 4)) { [weak self] color in
+            guard let self, let color, !PageColor.isClose(color, self.pageTopColor) else { return }
+            self.pageTopColor = color
+        }
+        sampleColor(in: CGRect(x: 0, y: bounds.height - 4, width: bounds.width, height: 4)) { [weak self] color in
+            guard let self, let color, !PageColor.isClose(color, self.pageBottomColor) else { return }
+            self.pageBottomColor = color
+        }
+    }
+
+    private func sampleColor(in rect: CGRect, completion: @escaping (UIColor?) -> Void) {
+        let configuration = WKSnapshotConfiguration()
+        configuration.rect = rect
+        configuration.snapshotWidth = 48
+        configuration.afterScreenUpdates = false
+        webView.takeSnapshot(with: configuration) { image, _ in
+            completion(image.flatMap(PageColor.average))
+        }
+    }
+
     // MARK: - Snapshots & state
 
     func captureSnapshot() {
@@ -300,13 +362,6 @@ final class TabController: NSObject, ObservableObject {
             guard !fresh.isEmpty else { return }
             blockedItems.append(contentsOf: fresh)
             onBlocked?(fresh)
-        case MessageName.colors:
-            guard let body = message.body as? [String: Any] else { return }
-            let inverted = body["inverted"] as? Bool ?? false
-            let top = (body["top"] as? String).flatMap { PageColor.parse($0, inverted: inverted) }
-            let bottom = (body["bottom"] as? String).flatMap { PageColor.parse($0, inverted: inverted) }
-            if let top, top != pageTopColor { pageTopColor = top }
-            if let bottom, bottom != pageBottomColor { pageBottomColor = bottom }
         case MessageName.fullscreen:
             if let body = message.body as? [String: Any], let active = body["active"] as? Bool {
                 videoFullscreenChanged(active: active, aspectRatio: (body["ratio"] as? Double) ?? 0)
@@ -362,12 +417,15 @@ extension TabController: WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         blockedItems = []
         isReaderAvailable = false
+        // Any other navigation (a link, going back) leaves reader mode.
+        if navigation !== readerNavigation { isReaderActive = false }
         setToolbarCollapsed(false)
         sync()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         sync()
+        scheduleColorSample(after: 0.3)
         onVisit?(self)
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 400_000_000)
@@ -445,7 +503,6 @@ enum ScriptLibrary {
     static let shieldsReport = file("NeutrinShields")
     static let globalPrivacyControl = file("NeutrinGPC")
     static let fullscreen = file("NeutrinFullscreen")
-    static let pageColors = file("NeutrinPageColors")
     static let reader = [file("Readability"), file("Readability-readerable"), file("NeutrinReader")].joined(separator: "\n;\n")
 
     static func darkMode(enabled: Bool) -> String {
@@ -481,6 +538,33 @@ enum DeviceOrientation {
 
 /// Turns a CSS color ("rgb(12, 34, 56)") into a UIColor.
 enum PageColor {
+    /// Average color of an image (used on thin page-edge snapshots).
+    static func average(_ image: UIImage) -> UIColor? {
+        guard let cgImage = image.cgImage else { return nil }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let drawn: Bool = pixel.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(data: buffer.baseAddress, width: 1, height: 1, bitsPerComponent: 8,
+                                          bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.interpolationQuality = .medium
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return true
+        }
+        guard drawn else { return nil }
+        return UIColor(red: CGFloat(pixel[0]) / 255, green: CGFloat(pixel[1]) / 255,
+                       blue: CGFloat(pixel[2]) / 255, alpha: 1)
+    }
+
+    /// Ignores tiny changes so the bars don't flicker while scrolling.
+    static func isClose(_ a: UIColor, _ b: UIColor?) -> Bool {
+        guard let b else { return false }
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        a.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        b.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        return abs(r1 - r2) + abs(g1 - g2) + abs(b1 - b2) < 0.06
+    }
+
     static func parse(_ css: String, inverted: Bool) -> UIColor? {
         let numbers = css.split(whereSeparator: { !"0123456789.".contains($0) }).compactMap { Double($0) }
         guard numbers.count >= 3 else { return nil }

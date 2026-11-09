@@ -38,6 +38,8 @@
     // Style is removed and re-added in the same task, so nothing flashes.
     removeStyle();
     if (!wanted) return;
+    // Neutrin's reader view has its own themes.
+    if (document.documentElement.dataset.neutrinReader) return;
     if (document.body && pageIsAlreadyDark()) return;
     addStyle();
   }

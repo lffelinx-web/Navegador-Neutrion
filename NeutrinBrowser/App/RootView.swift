@@ -1,0 +1,31 @@
+import SwiftUI
+
+/// Shows the start page for an empty tab, or the web page for a loaded one.
+struct RootView: View {
+    @EnvironmentObject private var store: BrowserStore
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showTabs = false
+
+    var body: some View {
+        ZStack {
+            AppBackground()
+
+            if let tab = store.activeTab, tab.url != nil {
+                BrowserView(controller: store.controller(for: tab.id), showTabs: $showTabs)
+                    .id(tab.id)
+                    .transition(.opacity)
+            } else {
+                HomeView(showTabs: $showTabs)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: store.activeTab?.url == nil)
+        .fullScreenCover(isPresented: $showTabs) {
+            TabsSpacesView()
+                .environmentObject(store)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { store.save() }
+        }
+    }
+}

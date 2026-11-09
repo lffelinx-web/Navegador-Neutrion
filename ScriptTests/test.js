@@ -14,35 +14,105 @@ function makeDom(html, url) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
-  // --- Shields report
-  const rules = [
-    { d: "doubleclick.net", c: "ads" },
-    { d: "google-analytics.com", c: "trackers" },
-    { d: "facebook.com", p: "/tr", c: "trackers", u: ["facebook.com"] },
-    { d: "connect.facebook.net", c: "trackers", u: ["facebook.com"] },
-  ];
-  const shields = read("NeutrinShields.js").replace("__NEUTRIN_RULES__", JSON.stringify(rules));
+  // --- Shields report (third-party hosts sent to the app)
+  const shields = read("NeutrinShields.js");
   let { dom, msgs } = makeDom(`<html><body>
     <script src="https://stats.g.doubleclick.net/x.js"></script>
     <img src="https://www.google-analytics.com/collect?v=1">
+    <img src="https://www.google-analytics.com/collect?v=2">
     <img src="https://www.facebook.com/tr?id=1">
-    <img src="https://www.facebook.com/photo.jpg">
-    <script src="https://cdn.example.org/app.js"></script>
-    <script src="https://connect.facebook.net/sdk.js"></script>
+    <img src="https://static.example.com/logo.png">
+    <a href="https://elsewhere.org/">link</a>
   </body></html>`, "https://news.example.com/article");
   dom.window.eval(shields);
   const s = dom.window.document.createElement("script");
   s.src = "https://ad.doubleclick.net/later.js"; dom.window.document.body.appendChild(s);
   await sleep(400);
-  const got = (msgs.neutrinShields || []).flat().map((x) => `${x.category}:${x.host}`).sort();
+  const got = (msgs.neutrinShields || []).flat().map((x) => x.host + x.path).sort();
   console.log("  reported:", got.join(", "));
-  ok(got.includes("ads:stats.g.doubleclick.net") && got.includes("ads:ad.doubleclick.net"), "ads incl. dynamically added");
-  ok(got.includes("trackers:www.google-analytics.com"), "tracker reported");
-  ok(got.includes("trackers:www.facebook.com") && got.length === 5, "fb pixel path only, cdn ignored");
+  ok(got.includes("stats.g.doubleclick.net/x.js") && got.includes("ad.doubleclick.net/later.js"), "third-party hosts incl. dynamically added");
+  ok(got.includes("www.facebook.com/tr") && got.filter((x) => x.startsWith("www.google-analytics")).length === 1, "deduplicated by host + first path segment");
+  ok(!got.some((x) => x.includes("example.com") || x.includes("elsewhere.org")), "same-site resources and plain links ignored");
 
-  ({ dom, msgs } = makeDom(`<body><script src="https://connect.facebook.net/sdk.js"></script></body>`, "https://www.facebook.com/"));
+  ({ dom, msgs } = makeDom(`<body><script src="https://static.bbc.co.uk/a.js"></script></body>`, "https://www.bbc.co.uk/"));
   dom.window.eval(shields); await sleep(400);
-  ok(!msgs.neutrinShields, "first-party / unless-domain not reported");
+  ok(!msgs.neutrinShields, "co.uk-style sites treated as first party");
+
+  // --- Filter list converter
+  const { neutrinConvertFilterList } = require(`${dir}/NeutrinFilterConverter.js`);
+  const sample = [
+    "[Adblock Plus 2.0]",
+    "! comment",
+    "||ads.example.net^",
+    "||tracker.io^$third-party",
+    "/banner/*/ad_$image,domain=news.com|~sport.news.com",
+    "|https://exact.com/path|",
+    "@@||ads.example.net/allowed.js",
+    "@@||goodsite.org^$document",
+    "@@||cleansite.org^$elemhide",
+    "||frames.example^$subdocument,script",
+    "||nope.example^$popup",
+    "||rewrite.example^$redirect=noop.js",
+    "/regex-[0-9]+/",
+    "example.*##.ad",
+    "##.ad-banner",
+    "##div[id^=\"google_ads\"]",
+    "news.com,blog.com##.sidebar-ad",
+    "~safe.com##.promo-box",
+    "##.not-everywhere",
+    "trusted.com#@#.not-everywhere",
+    "##.allowed-all",
+    "#@#.allowed-all",
+    "shop.com##.price:-abp-has(.x)",
+    "site.com#?#.x:has-text(Ad)",
+  ].join("\n");
+  const out = JSON.parse(neutrinConvertFilterList(sample));
+  const net = JSON.parse(out.networkJSON), cos = JSON.parse(out.cosmeticJSON);
+  const find = (re) => net.filter((r) => re.test(JSON.stringify(r)));
+  const matches = (rule, url) => new RegExp(rule.trigger["url-filter"], rule.trigger["url-filter-is-case-sensitive"] ? "" : "i").test(url);
+
+  const adRule = find(/ads\\\\.example/)[0];
+  ok(adRule && matches(adRule, "https://ads.example.net/x.js") && matches(adRule, "https://cdn.ads.example.net/") &&
+     !matches(adRule, "https://notads.example.net/") && !matches(adRule, "https://ads.example.network/"), "||domain^ anchors to domain and subdomains");
+  const tp = find(/tracker/)[0];
+  ok(tp && tp.trigger["load-type"][0] === "third-party", "$third-party -> load-type");
+  const banner = find(/banner/)[0];
+  ok(banner && banner.trigger["if-domain"][0] === "*news.com" && !banner.trigger["unless-domain"] &&
+     banner.trigger["resource-type"][0] === "image" && matches(banner, "https://cdn.x.com/banner/300/ad_1.png"), "domain= and type options");
+  const exact = find(/exact/)[0];
+  ok(exact && matches(exact, "https://exact.com/path") && !matches(exact, "https://exact.com/path2"), "| anchors");
+  const allowed = net.findIndex((r) => r.action.type === "ignore-previous-rules" && /allowed/.test(r.trigger["url-filter"]));
+  const blocked = net.findIndex((r) => r === adRule);
+  ok(allowed > blocked, "exceptions come after blocks");
+  ok(net.some((r) => r.action.type === "ignore-previous-rules" && r.trigger["if-domain"]?.[0] === "*goodsite.org") &&
+     cos.some((r) => r.action.type === "ignore-previous-rules" && r.trigger["if-domain"]?.[0] === "*goodsite.org"), "$document exception allows whole site");
+  ok(cos.some((r) => r.trigger["if-domain"]?.[0] === "*cleansite.org") &&
+     !net.some((r) => r.trigger["if-domain"]?.[0] === "*cleansite.org"), "$elemhide only affects element hiding");
+  const frames = find(/frames/);
+  ok(frames.length === 2 && frames.some((r) => r.trigger["load-context"]?.[0] === "child-frame"), "subdocument -> child-frame rule");
+  ok(!find(/nope|rewrite|regex/).length, "popup / redirect / regex filters skipped");
+  const generic = cos.find((r) => r.trigger["url-filter"] === ".*" && !r.trigger["if-domain"] && !r.trigger["unless-domain"] && r.action.type === "css-display-none");
+  ok(generic && generic.action.selector.includes(".ad-banner") && !generic.action.selector.includes(".allowed-all") &&
+     !generic.action.selector.includes(".not-everywhere"), "generic hiding batched, exceptions respected");
+  ok(cos.some((r) => r.trigger["unless-domain"]?.[0] === "*trusted.com" && r.action.selector === ".not-everywhere"), "site exception -> unless-domain");
+  ok(cos.some((r) => r.trigger["if-domain"]?.join() === "*blog.com,*news.com" && r.action.selector === ".sidebar-ad"), "site-specific hiding");
+  ok(cos.some((r) => r.trigger["unless-domain"]?.[0] === "*safe.com" && r.action.selector === ".promo-box"), "~domain hiding");
+  ok(!JSON.stringify(cos).includes("has-text") && !JSON.stringify(cos).includes("-abp-") && !JSON.stringify(cos).includes(".ad\""), "procedural & wildcard-domain filters skipped");
+  ok(out.blockDomains.includes("tracker.io") && !out.blockDomains.includes("frames.example"), "plain domains exported for the report");
+
+  // Real lists, if downloaded next to the tests (see README).
+  for (const name of ["easylist", "easyprivacy"]) {
+    const file = require("path").join(__dirname, `${name}.txt`);
+    if (!fs.existsSync(file)) continue;
+    const real = JSON.parse(neutrinConvertFilterList(fs.readFileSync(file, "utf8")));
+    const rules = JSON.parse(real.networkJSON).concat(JSON.parse(real.cosmeticJSON));
+    let invalid = 0;
+    for (const r of rules) {
+      try { new RegExp(r.trigger["url-filter"]); } catch (_) { invalid++; }
+      if (/\{|\(\?|(^|[^\\])\|/.test(r.trigger["url-filter"])) invalid++;
+    }
+    ok(rules.length > 1000 && rules.length < 150000 && invalid === 0, `${name}: ${rules.length} rules, ${invalid} invalid`);
+  }
 
   // --- Dark mode
   const dark = (on) => read("NeutrinDarkMode.js").replace("__NEUTRIN_DARK_ENABLED__", String(on));

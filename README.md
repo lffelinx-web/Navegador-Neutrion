@@ -8,7 +8,7 @@ Un navegador para iOS, más tranquilo y **centrado en la privacidad**. Bloquea a
 
 | Función | Cómo funciona |
 |---|---|
-| **Shields: bloqueo de anuncios y rastreadores** | Unos 200 servicios conocidos de anuncios (DoubleClick, Taboola, Criteo…) y rastreo (Google Analytics, píxel de Meta, Hotjar…) se bloquean **antes de cargar**, con las reglas nativas de WebKit (`WKContentRuleList`). También oculta los huecos vacíos que dejan los anuncios. |
+| **Shields: bloqueo de anuncios y rastreadores** | Dos niveles: **(1)** una lista propia de unos 190 servicios (DoubleClick, Taboola, Google Analytics, píxel de Meta…) que funciona sin conexión desde el primer momento; **(2)** las listas comunitarias **EasyList** (anuncios) y **EasyPrivacy** (rastreadores), con más de 100.000 reglas, que se **descargan y actualizan solas** cada 4 días. Todo se bloquea **antes de cargar** con las reglas nativas de WebKit (`WKContentRuleList`), y también se ocultan los huecos que dejan los anuncios. |
 | **Panel de Shields** | El escudo de la barra de direcciones muestra qué se bloqueó en la página y permite apagar Shields en un sitio concreto (la página se recarga). |
 | **Estadísticas** | La página de inicio muestra cuántos anuncios y rastreadores se han bloqueado en total. |
 | **Enlaces limpios** | Quita parámetros de rastreo (`utm_*`, `fbclid`, `gclid`, `msclkid`…) de los enlaces que abres, compartes o guardas. |
@@ -17,6 +17,15 @@ Un navegador para iOS, más tranquilo y **centrado en la privacidad**. Bloquea a
 | **Pestañas privadas** | No guardan historial, y sus cookies y datos se borran al cerrarlas. Comparten un almacén en memoria que se descarta al cerrar la última. |
 | **Buscadores privados** | DuckDuckGo por defecto. También incluye Brave Search, Startpage, Ecosia, Google y Bing. |
 | **Datos locales** | Todo se guarda solo en el dispositivo, cifrado con la protección de archivos de iOS. No hay cuentas ni telemetría. |
+
+### Cómo se actualizan EasyList y EasyPrivacy
+
+1. La app descarga la lista de `easylist.to` (si falla, usa el espejo de adblockplus.org), con `ETag`/`If-Modified-Since` para no bajarla de nuevo si no ha cambiado.
+2. `NeutrinFilterConverter.js` convierte la sintaxis de Adblock Plus a reglas de WebKit dentro de **JavaScriptCore**, en segundo plano. Es el mismo código que se prueba en `ScriptTests`.
+3. WebKit compila las reglas y las guarda en caché, así que en los siguientes arranques están listas al instante.
+4. Las reglas que WebKit no puede expresar (expresiones regulares, filtros "procedurales", `$redirect`, `$csp`, `$popup`…) se omiten en lugar de adivinarlas.
+
+En **Ajustes → Filter Lists** puedes activar o desactivar cada lista, ver cuántas reglas tiene, cuándo se actualizó y forzar una actualización.
 
 ## Lectura y apariencia
 
@@ -50,7 +59,7 @@ NeutrinBrowser/
 ├── App/            Punto de entrada y RootView (inicio ↔ navegador)
 ├── Models/         Space, Tab, Favorite, History, SearchEngine, URLResolver
 ├── Store/          BrowserStore (estado + persistencia), TabController (WKWebView)
-├── Privacy/        Listas de bloqueo, ContentBlocker (WKContentRuleList), LinkCleaner
+├── Privacy/        Lista propia, EasyList/EasyPrivacy (FilterListManager + conversor), LinkCleaner
 ├── Reader/         Modo lectura: modelos, plantilla HTML y vista
 ├── Resources/      Scripts JS (Shields, modo oscuro, GPC, Readability)
 ├── Views/          HomeView, BrowserView, TabsSpacesView, ShieldsPanel, ajustes, escáner QR
@@ -60,12 +69,14 @@ NeutrinBrowser/
 
 ## Pruebas de los scripts
 
-Los scripts que se inyectan en las páginas (`NeutrinBrowser/Resources/Scripts`) se pueden probar con Node y jsdom: detección de anuncios y rastreadores, modo oscuro, detección de artículos y GPC.
+Los scripts que se inyectan en las páginas y el conversor de listas (`NeutrinBrowser/Resources/Scripts`) se pueden probar con Node y jsdom: informe de Shields, conversión de filtros, modo oscuro, detección de artículos y GPC. Si pones `easylist.txt` y `easyprivacy.txt` en `ScriptTests/`, también se comprueba la conversión de las listas completas.
 
 ```sh
 cd ScriptTests && npm install && npm test
 ```
 
 ## Créditos
+
+- [EasyList y EasyPrivacy](https://easylist.to), del equipo de EasyList. La app las descarga directamente; no se incluyen en el repositorio.
 
 - [Mozilla Readability](https://github.com/mozilla/readability) 0.6.0, licencia Apache 2.0 (ver `NeutrinBrowser/Resources/Scripts/Readability-LICENSE.txt`).

@@ -26,7 +26,11 @@ struct RootView: View {
                 .environmentObject(store)
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { store.save() }
+            if phase == .active {
+                store.checkForFilterListUpdates()
+            } else {
+                store.save()
+            }
         }
         .onAppear { store.updateSystemAppearance(isDark: colorScheme == .dark) }
         .onChange(of: colorScheme) { _, scheme in

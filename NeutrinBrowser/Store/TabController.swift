@@ -122,7 +122,7 @@ final class TabController: NSObject, ObservableObject {
         if settings.blockTrackers { categories.insert(.trackers) }
         if !categories.isEmpty {
             contentController.addUserScript(WKUserScript(
-                source: ScriptLibrary.shieldsReport(categories: categories),
+                source: ScriptLibrary.shieldsReport,
                 injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient
             ))
         }
@@ -190,15 +190,16 @@ final class TabController: NSObject, ObservableObject {
     fileprivate func handle(_ message: WKScriptMessage) {
         switch message.name {
         case MessageName.shields:
-            guard let reports = message.body as? [[String: Any]],
-                  store?.shieldsEnabled(for: url?.host) ?? false else { return }
-            let known = Set(blockedItems)
-            let fresh = reports.compactMap { report -> BlockedItem? in
+            guard let reports = message.body as? [[String: Any]], let store,
+                  store.shieldsEnabled(for: url?.host) else { return }
+            var known = Set(blockedItems)
+            var fresh: [BlockedItem] = []
+            for report in reports {
                 guard let host = report["host"] as? String,
-                      let raw = report["category"] as? String,
-                      let category = Blocklist.Category(rawValue: raw) else { return nil }
+                      let category = store.blockedCategory(host: host, path: report["path"] as? String ?? "/",
+                                                           pageHost: url?.host) else { continue }
                 let item = BlockedItem(host: host, category: category)
-                return known.contains(item) ? nil : item
+                if known.insert(item).inserted { fresh.append(item) }
             }
             guard !fresh.isEmpty else { return }
             blockedItems.append(contentsOf: fresh)
@@ -333,16 +334,11 @@ enum ScriptLibrary {
     }
 
     private static let darkModeTemplate = file("NeutrinDarkMode")
-    private static let shieldsTemplate = file("NeutrinShields")
+    static let shieldsReport = file("NeutrinShields")
     static let globalPrivacyControl = file("NeutrinGPC")
     static let reader = [file("Readability"), file("Readability-readerable"), file("NeutrinReader")].joined(separator: "\n;\n")
 
     static func darkMode(enabled: Bool) -> String {
         darkModeTemplate.replacingOccurrences(of: "__NEUTRIN_DARK_ENABLED__", with: enabled ? "true" : "false")
-    }
-
-    static func shieldsReport(categories: Set<Blocklist.Category>) -> String {
-        shieldsTemplate.replacingOccurrences(of: "__NEUTRIN_RULES__",
-                                             with: Blocklist.pageReportRulesJSON(categories: categories))
     }
 }

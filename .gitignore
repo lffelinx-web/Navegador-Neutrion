@@ -5,3 +5,5 @@ DerivedData/
 build/
 .swiftpm/
 node_modules/
+ScriptTests/easylist.txt
+ScriptTests/easyprivacy.txt

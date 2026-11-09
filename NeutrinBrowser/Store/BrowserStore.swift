@@ -26,6 +26,7 @@ final class BrowserStore: ObservableObject {
     @Published private(set) var systemIsDark = false
 
     let contentBlocker = ContentBlocker()
+    let filterLists = FilterListManager()
     private var blockerTask: Task<Void, Never>?
 
     private var lastTabBySpace: [String: UUID]
@@ -56,10 +57,14 @@ final class BrowserStore: ObservableObject {
             selectSpace(activeSpaceID)
         }
 
+        filterLists.onRulesChanged = { [weak self] in self?.refreshShields() }
         blockerTask = Task { [weak self] in
             guard let self else { return }
             await self.contentBlocker.prepare()
+            await self.filterLists.loadCached()
             self.refreshShields()
+            // Download or refresh EasyList/EasyPrivacy in the background.
+            Task { [weak self] in await self?.filterLists.updateIfNeeded() }
         }
 
         objectWillChange
@@ -90,7 +95,22 @@ final class BrowserStore: ObservableObject {
     // MARK: - Shields
 
     var activeRuleLists: [WKContentRuleList] {
-        contentBlocker.ruleLists(for: privacySettings)
+        contentBlocker.ruleLists(for: privacySettings) + filterLists.ruleLists(for: privacySettings)
+    }
+
+    /// Whether Shields blocked this third-party resource (for the per-page report).
+    func blockedCategory(host: String, path: String, pageHost: String?) -> Blocklist.Category? {
+        var categories = Set<Blocklist.Category>()
+        if privacySettings.blockAds { categories.insert(.ads) }
+        if privacySettings.blockTrackers { categories.insert(.trackers) }
+        guard !categories.isEmpty else { return nil }
+        return Blocklist.category(forHost: host, path: path, pageHost: pageHost, categories: categories)
+            ?? filterLists.category(forHost: host, settings: privacySettings)
+    }
+
+    /// Called when the app comes to the foreground.
+    func checkForFilterListUpdates() {
+        Task { await filterLists.updateIfNeeded() }
     }
 
     var shieldsAreConfigured: Bool {
@@ -152,7 +172,7 @@ final class BrowserStore: ObservableObject {
         }
     }
 
-    private func refreshShields() {
+    func refreshShields() {
         controllers.values.forEach { $0.applyShields(forHost: $0.url?.host) }
     }
 

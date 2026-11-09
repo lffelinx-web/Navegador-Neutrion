@@ -174,6 +174,11 @@ struct SettingsView: View {
                     Toggle("Hide Empty Ad Spaces", isOn: $store.privacySettings.hideAdPlaceholders)
                         .disabled(!store.privacySettings.blockAds)
                     Toggle("Block Trackers", isOn: $store.privacySettings.blockTrackers)
+                    NavigationLink {
+                        FilterListsView(manager: store.filterLists)
+                    } label: {
+                        LabeledContent("Filter Lists", value: "EasyList, EasyPrivacy")
+                    }
                 } header: {
                     Text("Shields")
                 } footer: {
@@ -296,6 +301,70 @@ private struct StatCell: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+    }
+}
+
+struct FilterListsView: View {
+    @ObservedObject var manager: FilterListManager
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(FilterListManager.sources) { source in
+                    FilterListRow(source: source, manager: manager)
+                }
+            } footer: {
+                Text("Neutrin's built-in list always works offline. These community lists add tens of thousands of rules and update automatically every few days. EasyList and EasyPrivacy are maintained by the EasyList authors (easylist.to).")
+            }
+
+            Section {
+                Button {
+                    Task { await manager.updateAll() }
+                } label: {
+                    HStack {
+                        Text("Update Now")
+                        Spacer()
+                        if !manager.updating.isEmpty { ProgressView() }
+                    }
+                }
+                .disabled(!manager.updating.isEmpty)
+            }
+        }
+        .navigationTitle("Filter Lists")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct FilterListRow: View {
+    let source: FilterListManager.Source
+    @ObservedObject var manager: FilterListManager
+
+    var body: some View {
+        let sub = manager.subscription(source.id)
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: Binding(get: { sub.isEnabled }, set: { manager.setEnabled($0, for: source.id) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(source.name).font(.body.weight(.semibold))
+                    Text(source.summary).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            Group {
+                if manager.updating.contains(source.id) {
+                    Label("Updating…", systemImage: "arrow.down.circle")
+                } else if let error = sub.lastError {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                } else if let updated = sub.lastUpdated {
+                    Label("\((sub.networkRuleCount + sub.cosmeticRuleCount).formatted()) rules · updated \(updated.formatted(.relative(presentation: .named)))",
+                          systemImage: "checkmark.circle")
+                } else if sub.isEnabled {
+                    Label("Waiting to download", systemImage: "clock")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
     }
 }
 

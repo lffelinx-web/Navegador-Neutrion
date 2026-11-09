@@ -107,15 +107,35 @@ enum Blocklist {
         ]])
     }
 
-    /// Data for NeutrinShields.js, limited to the categories being blocked.
-    static func pageReportRulesJSON(categories: Set<Category>) -> String {
-        let rules: [[String: Any]] = entries.filter { categories.contains($0.category) }.map { entry in
-            var rule: [String: Any] = ["d": entry.domain, "c": entry.category.rawValue]
-            if let path = entry.path { rule["p"] = path }
-            if !entry.unlessDomains.isEmpty { rule["u"] = entry.unlessDomains }
-            return rule
+    // MARK: - Classification (for the per-page report)
+
+    private static let entriesByDomain: [String: [Entry]] = Dictionary(grouping: entries, by: \.domain)
+
+    /// "a.b.example.com" -> ["a.b.example.com", "b.example.com", "example.com"]
+    static func suffixes(of host: String) -> [String] {
+        let labels = host.lowercased().split(separator: ".")
+        guard labels.count > 1 else { return [host.lowercased()] }
+        return (0..<(labels.count - 1)).map { labels[$0...].joined(separator: ".") }
+    }
+
+    static func matches(_ host: String, domain: String) -> Bool {
+        host == domain || host.hasSuffix("." + domain)
+    }
+
+    /// Category of a third-party resource according to Neutrin's built-in list.
+    /// `path` is the first path segment, e.g. "/tr".
+    static func category(forHost host: String, path: String, pageHost: String?,
+                         categories: Set<Category>) -> Category? {
+        let page = pageHost?.lowercased() ?? ""
+        for suffix in suffixes(of: host) {
+            for entry in entriesByDomain[suffix] ?? [] where categories.contains(entry.category) {
+                if let entryPath = entry.path, !path.hasPrefix(entryPath) { continue }
+                if matches(page, domain: entry.domain) { continue } // first party
+                if entry.unlessDomains.contains(where: { matches(page, domain: $0) }) { continue }
+                return entry.category
+            }
         }
-        return encode(rules)
+        return nil
     }
 
     /// Matches the domain and any subdomain, e.g. `^https?://([^/]+\.)?doubleclick\.net[/:]`.

@@ -123,7 +123,7 @@ final class ReaderTemplateTests: XCTestCase {
         XCTAssertTrue(html.contains("&lt;script&gt;alert(1)&lt;/script&gt; &amp; more"))
         XCTAssertFalse(html.contains("<script>"))
         XCTAssertTrue(html.contains("Content-Security-Policy"))
-        XCTAssertTrue(html.contains("2 min read"))
+        XCTAssertTrue(html.contains("2 min de lectura"))
         XCTAssertTrue(html.contains("article.space"))
     }
 }

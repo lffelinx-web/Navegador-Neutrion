@@ -30,14 +30,14 @@ final class FilterListManager: ObservableObject {
     static let sources: [Source] = [
         Source(
             id: "easylist", name: "EasyList",
-            summary: "Blocks ads on websites around the world.",
+            summary: "Bloquea anuncios en sitios de todo el mundo.",
             category: .ads,
             urls: [URL(string: "https://easylist.to/easylist/easylist.txt")!,
                    URL(string: "https://easylist-downloads.adblockplus.org/easylist.txt")!]
         ),
         Source(
             id: "easyprivacy", name: "EasyPrivacy",
-            summary: "Blocks tracking scripts, pixels and analytics.",
+            summary: "Bloquea scripts de rastreo, píxeles y analíticas.",
             category: .trackers,
             urls: [URL(string: "https://easylist.to/easylist/easyprivacy.txt")!,
                    URL(string: "https://easylist-downloads.adblockplus.org/easyprivacy.txt")!]
@@ -220,8 +220,8 @@ final class FilterListManager: ObservableObject {
 
         var errorDescription: String? {
             switch self {
-            case .badResponse(let code): "The server answered with error \(code)."
-            case .notAFilterList: "The download wasn't a valid filter list."
+            case .badResponse(let code): "El servidor respondió con el error \(code)."
+            case .notAFilterList: "La descarga no era una lista de filtros válida."
             }
         }
     }

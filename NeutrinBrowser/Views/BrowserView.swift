@@ -13,17 +13,40 @@ struct BrowserView: View {
     @State private var readerArticle: ReaderArticle?
     @State private var isOpeningReader = false
     @State private var readerFailed = false
+    @State private var showSettings = false
     @FocusState private var addressFocused: Bool
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            WebViewContainer(webView: controller.webView)
-                .ignoresSafeArea(edges: .bottom)
-                .overlay(alignment: .top) { progressBar }
+            GeometryReader { proxy in
+                ZStack(alignment: .top) {
+                    // The page runs edge to edge; WebKit keeps its content clear of the notch.
+                    WebViewContainer(webView: controller.webView)
+                    // Frosted strip behind the status bar / Dynamic Island.
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .frame(height: proxy.safeAreaInsets.top)
+                        .overlay(alignment: .bottom) { progressBar }
+                        .allowsHitTesting(false)
+                }
+                .ignoresSafeArea()
+            }
 
-            toolbar
-                .padding(.horizontal, 14)
-                .padding(.bottom, 6)
+            Group {
+                if controller.isToolbarCollapsed && !isEditing {
+                    compactBar
+                        .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+                } else {
+                    toolbar
+                        .padding(.horizontal, 14)
+                        .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
+                }
+            }
+            .padding(.bottom, 6)
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: controller.isToolbarCollapsed)
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView().environmentObject(store)
         }
         .sheet(isPresented: $showShields) {
             ShieldsPanel(controller: controller).environmentObject(store)
@@ -32,8 +55,8 @@ struct BrowserView: View {
             ReaderView(article: article) { url in store.open(url) }
                 .environmentObject(store)
         }
-        .alert("Reader isn't available for this page", isPresented: $readerFailed) {
-            Button("OK", role: .cancel) {}
+        .alert("El modo lectura no está disponible en esta página", isPresented: $readerFailed) {
+            Button("Aceptar", role: .cancel) {}
         }
     }
 
@@ -53,19 +76,42 @@ struct BrowserView: View {
         }
     }
 
+    /// Small address pill shown while scrolling down; tap to bring the toolbar back.
+    private var compactBar: some View {
+        Button {
+            controller.setToolbarCollapsed(false)
+        } label: {
+            HStack(spacing: 5) {
+                if controller.isPrivate {
+                    Image(systemName: "eye.slash").foregroundStyle(Color.indigo)
+                }
+                Image(systemName: controller.url?.scheme == "https" ? "lock.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(controller.url?.scheme == "https" ? Color.secondary : Color.orange)
+                Text(controller.url?.displayHost ?? "")
+                    .lineLimit(1)
+            }
+            .font(.footnote.weight(.semibold))
+            .padding(.horizontal, 16)
+            .frame(height: 34)
+            .glass(cornerRadius: 17, interactive: true)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Mostrar barra: \(controller.url?.displayHost ?? "")")
+    }
+
     private var toolbar: some View {
         HStack(spacing: 2) {
             if isEditing {
                 editingField
             } else {
-                ToolbarIcon(symbol: "arrow.left", label: "Back") {
+                ToolbarIcon(symbol: "arrow.left", label: "Atrás") {
                     if controller.canGoBack { controller.webView.goBack() } else { store.goHome() }
                 }
-                ToolbarIcon(symbol: "arrow.right", label: "Forward", isEnabled: controller.canGoForward) {
+                ToolbarIcon(symbol: "arrow.right", label: "Adelante", isEnabled: controller.canGoForward) {
                     controller.webView.goForward()
                 }
                 addressPill
-                ToolbarIcon(symbol: "square.on.square", label: "Tabs") {
+                ToolbarIcon(symbol: "square.on.square", label: "Pestañas") {
                     controller.captureSnapshot()
                     showTabs = true
                 }
@@ -76,7 +122,7 @@ struct BrowserView: View {
         .glass(cornerRadius: 28)
         .overlay(alignment: .top) {
             if controller.isPrivate && !isEditing {
-                Label("Private", systemImage: "eye.slash")
+                Label("Privado", systemImage: "eye.slash")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 8)
@@ -112,7 +158,7 @@ struct BrowserView: View {
                     }
                     .contentShape(Rectangle())
             }
-            .accessibilityLabel(shieldsUp ? "Shields up, \(controller.blockedItems.count) blocked" : "Shields down")
+            .accessibilityLabel(shieldsUp ? "Shields activado, \(controller.blockedItems.count) bloqueados" : "Shields desactivado")
 
             Button {
                 addressText = controller.url?.absoluteString ?? ""
@@ -132,7 +178,7 @@ struct BrowserView: View {
                 .frame(maxWidth: .infinity, minHeight: 40)
                 .contentShape(Rectangle())
             }
-            .accessibilityLabel("Address: \(controller.url?.displayHost ?? "")")
+            .accessibilityLabel("Dirección: \(controller.url?.displayHost ?? "")")
 
             if controller.isReaderAvailable {
                 Button(action: openReader) {
@@ -147,7 +193,7 @@ struct BrowserView: View {
                     .frame(width: 32, height: 40)
                     .contentShape(Rectangle())
                 }
-                .accessibilityLabel("Reader mode")
+                .accessibilityLabel("Modo lectura")
                 .transition(.scale.combined(with: .opacity))
             } else {
                 Color.clear.frame(width: 32, height: 40)
@@ -164,7 +210,7 @@ struct BrowserView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
                 .padding(.leading, 10)
-            TextField("Search or enter an address", text: $addressText)
+            TextField("Busca o escribe una dirección", text: $addressText)
                 .focused($addressFocused)
                 .keyboardType(.webSearch)
                 .textInputAutocapitalization(.never)
@@ -175,7 +221,18 @@ struct BrowserView: View {
                     isEditing = false
                 }
                 .onAppear { addressFocused = true }
-            Button("Cancel") { isEditing = false }
+                // Select the whole address so typing replaces it.
+                .onReceive(NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)) { note in
+                    guard let field = note.object as? UITextField else { return }
+                    DispatchQueue.main.async { field.selectAll(nil) }
+                }
+            if !addressText.isEmpty {
+                Button { addressText = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                }
+                .accessibilityLabel("Borrar")
+            }
+            Button("Cancelar") { isEditing = false }
                 .font(.subheadline.weight(.semibold))
                 .padding(.trailing, 10)
         }
@@ -185,26 +242,26 @@ struct BrowserView: View {
     private var moreMenu: some View {
         Menu {
             Button { controller.reloadOrStop() } label: {
-                Label(controller.isLoading ? "Stop" : "Reload",
+                Label(controller.isLoading ? "Detener" : "Recargar",
                       systemImage: controller.isLoading ? "xmark" : "arrow.clockwise")
             }
             if let url = controller.url {
                 let shareURL = LinkCleaner.cleaned(url)
                 ShareLink(item: shareURL) {
-                    Label("Share", systemImage: "square.and.arrow.up")
+                    Label("Compartir", systemImage: "square.and.arrow.up")
                 }
                 let favorite = store.isFavorite(shareURL)
                 Button { store.toggleFavorite(title: controller.title, url: url) } label: {
-                    Label(favorite ? "Remove from Favorites" : "Add to Favorites",
+                    Label(favorite ? "Quitar de favoritos" : "Añadir a favoritos",
                           systemImage: favorite ? "star.slash" : "star")
                 }
                 Button { UIPasteboard.general.url = shareURL } label: {
-                    Label("Copy Link", systemImage: "link")
+                    Label("Copiar enlace", systemImage: "link")
                 }
             }
             if controller.isReaderAvailable {
                 Button(action: openReader) {
-                    Label("Reader Mode", systemImage: "doc.plaintext")
+                    Label("Modo lectura", systemImage: "doc.plaintext")
                 }
             }
             Picker(selection: $store.privacySettings.websiteDarkMode) {
@@ -212,28 +269,31 @@ struct BrowserView: View {
                     Text(mode.name).tag(mode)
                 }
             } label: {
-                Label("Dark Mode for Websites", systemImage: "moon")
+                Label("Modo oscuro en sitios web", systemImage: "moon")
             }
             .pickerStyle(.menu)
             Divider()
             Button { store.newTab(isPrivate: controller.isPrivate) } label: {
-                Label(controller.isPrivate ? "New Private Tab" : "New Tab", systemImage: "plus.square.on.square")
+                Label(controller.isPrivate ? "Nueva pestaña privada" : "Nueva pestaña", systemImage: "plus.square.on.square")
             }
             if !controller.isPrivate {
                 Button { store.newTab(isPrivate: true) } label: {
-                    Label("New Private Tab", systemImage: "eye.slash")
+                    Label("Nueva pestaña privada", systemImage: "eye.slash")
                 }
             }
             Button { store.goHome() } label: {
-                Label("Start Page", systemImage: "house")
+                Label("Página de inicio", systemImage: "house")
+            }
+            Button { showSettings = true } label: {
+                Label("Ajustes", systemImage: "gearshape")
             }
             Button(role: .destructive) { store.close(controller.id) } label: {
-                Label("Close Tab", systemImage: "xmark.square")
+                Label("Cerrar pestaña", systemImage: "xmark.square")
             }
         } label: {
             ToolbarIconLabel(symbol: "ellipsis")
         }
-        .accessibilityLabel("More")
+        .accessibilityLabel("Más")
     }
 
     private func openReader() {

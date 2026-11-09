@@ -27,10 +27,10 @@ struct ShieldsPanel: View {
             .navigationTitle("Shields")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Listo") { dismiss() } }
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                        .accessibilityLabel("Privacy settings")
+                        .accessibilityLabel("Ajustes de privacidad")
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView().environmentObject(store) }
@@ -46,7 +46,7 @@ struct ShieldsPanel: View {
                 .frame(width: 84, height: 84)
                 .glass(cornerRadius: 26)
             VStack(spacing: 4) {
-                Text(isUp ? "Shields are up" : "Shields are down")
+                Text(isUp ? "Shields activado" : "Shields desactivado")
                     .font(.title3.weight(.bold))
                 Text(host)
                     .font(.subheadline)
@@ -56,16 +56,16 @@ struct ShieldsPanel: View {
                 get: { store.shieldsEnabled(for: controller.url?.host) },
                 set: { store.setShields($0, for: controller.url?.host) }
             )) {
-                Text("Block ads & trackers on this site")
+                Text("Bloquear anuncios y rastreadores aquí")
                     .font(.subheadline.weight(.medium))
             }
             .disabled(!store.shieldsAreConfigured || host.isEmpty)
             .padding(.horizontal, 16)
             .frame(height: 52)
-            .glass(cornerRadius: 18)
+            .card(cornerRadius: 18)
 
             if !store.shieldsAreConfigured {
-                Text("Ad and tracker blocking is off for all sites in Settings.")
+                Text("El bloqueo de anuncios y rastreadores está desactivado en Ajustes.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -74,8 +74,8 @@ struct ShieldsPanel: View {
 
     private var counters: some View {
         HStack(spacing: 12) {
-            CounterTile(value: ads.count, title: "Ads blocked", symbol: "rectangle.badge.xmark")
-            CounterTile(value: trackers.count, title: "Trackers blocked", symbol: "eye.slash")
+            CounterTile(value: ads.count, title: "Anuncios bloqueados", symbol: "rectangle.badge.xmark")
+            CounterTile(value: trackers.count, title: "Rastreadores bloqueados", symbol: "eye.slash")
         }
     }
 
@@ -83,7 +83,7 @@ struct ShieldsPanel: View {
     private var blockedList: some View {
         if !controller.blockedItems.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Blocked on this page")
+                Text("Bloqueado en esta página")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 16)
@@ -95,7 +95,7 @@ struct ShieldsPanel: View {
                             .font(.subheadline)
                             .lineLimit(1)
                         Spacer()
-                        Text(item.category == .ads ? "Ad" : "Tracker")
+                        Text(item.category == .ads ? "Anuncio" : "Rastreador")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(item.category == .ads ? Color.orange : Color.neutrinBlue)
                             .padding(.horizontal, 8)
@@ -107,7 +107,7 @@ struct ShieldsPanel: View {
                 }
             }
             .padding(.bottom, 8)
-            .glass(cornerRadius: 20)
+            .card(cornerRadius: 20)
         }
     }
 
@@ -116,16 +116,16 @@ struct ShieldsPanel: View {
         let secure = controller.url?.scheme == "https"
         return VStack(spacing: 0) {
             ProtectionRow(symbol: secure ? "lock.fill" : "lock.open",
-                          title: secure ? "Secure connection" : "Connection not secure",
+                          title: secure ? "Conexión segura" : "Conexión no segura",
                           isOn: secure)
             Divider().padding(.leading, 48)
             ProtectionRow(symbol: "hand.raised", title: "Global Privacy Control", isOn: settings.globalPrivacyControl)
             Divider().padding(.leading, 48)
-            ProtectionRow(symbol: "link", title: "Tracking parameters removed from links", isOn: settings.removeTrackingParameters)
+            ProtectionRow(symbol: "link", title: "Parámetros de rastreo quitados de los enlaces", isOn: settings.removeTrackingParameters)
             Divider().padding(.leading, 48)
-            ProtectionRow(symbol: "eye.slash", title: "Private tab (nothing saved)", isOn: controller.isPrivate)
+            ProtectionRow(symbol: "eye.slash", title: "Pestaña privada (no se guarda nada)", isOn: controller.isPrivate)
         }
-        .glass(cornerRadius: 20)
+        .card(cornerRadius: 20)
     }
 }
 
@@ -148,7 +148,7 @@ private struct CounterTile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .glass(cornerRadius: 20)
+        .card(cornerRadius: 20)
         .accessibilityElement(children: .combine)
     }
 }
@@ -171,6 +171,6 @@ private struct ProtectionRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
-        .accessibilityValue(isOn ? "On" : "Off")
+        .accessibilityValue(isOn ? "Activado" : "Desactivado")
     }
 }

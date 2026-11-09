@@ -20,12 +20,12 @@ struct ReaderView: View {
 
             HStack(spacing: 2) {
                 Button { dismiss() } label: {
-                    Label("Done", systemImage: "xmark")
+                    Label("Listo", systemImage: "xmark")
                         .labelStyle(.iconOnly)
                         .font(.system(size: 17, weight: .medium))
                         .frame(width: 44, height: 40)
                 }
-                Text(article.url?.displayHost ?? "Reader")
+                Text(article.url?.displayHost ?? "Lectura")
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity)
@@ -35,14 +35,14 @@ struct ReaderView: View {
                             .font(.system(size: 17, weight: .medium))
                             .frame(width: 44, height: 40)
                     }
-                    .accessibilityLabel("Share")
+                    .accessibilityLabel("Compartir")
                 }
                 Button { showSettings = true } label: {
                     Image(systemName: "textformat.size")
                         .font(.system(size: 17, weight: .medium))
                         .frame(width: 44, height: 40)
                 }
-                .accessibilityLabel("Text settings")
+                .accessibilityLabel("Ajustes de texto")
                 .popover(isPresented: $showSettings) {
                     ReaderSettingsPanel(settings: $store.readerSettings)
                         .presentationCompactAdaptation(.popover)
@@ -70,19 +70,19 @@ struct ReaderSettingsPanel: View {
                 } label: {
                     Text("A").font(.system(size: 15)).frame(maxWidth: .infinity, minHeight: 40)
                 }
-                .accessibilityLabel("Smaller text")
+                .accessibilityLabel("Texto más pequeño")
                 Divider().frame(height: 24)
                 Button {
                     settings.fontSize = min(ReaderSettings.fontSizeRange.upperBound, settings.fontSize + 1)
                 } label: {
                     Text("A").font(.system(size: 24)).frame(maxWidth: .infinity, minHeight: 40)
                 }
-                .accessibilityLabel("Larger text")
+                .accessibilityLabel("Texto más grande")
             }
             .buttonStyle(.plain)
             .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            Picker("Font", selection: $settings.font) {
+            Picker("Fuente", selection: $settings.font) {
                 ForEach(ReaderFont.allCases) { font in
                     Text(font.name).tag(font)
                 }

@@ -37,7 +37,7 @@ struct TabRecord: Identifiable, Codable, Hashable {
 
     var displayTitle: String {
         if !title.isEmpty { return title }
-        return url?.displayHost ?? "Start Page"
+        return url?.displayHost ?? "Página de inicio"
     }
 }
 
@@ -61,6 +61,15 @@ struct HistoryEntry: Identifiable, Codable, Hashable {
 enum Artwork: String, Codable, CaseIterable, Identifiable {
     case mountains, leaf, waves, sunset
     var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .mountains: "Montañas"
+        case .leaf: "Hoja"
+        case .waves: "Ondas"
+        case .sunset: "Atardecer"
+        }
+    }
 
     /// Stable choice for a given identifier (UUID bytes don't change between launches).
     static func forID(_ id: UUID) -> Artwork {
@@ -114,9 +123,9 @@ enum WebsiteDarkMode: String, Codable, CaseIterable, Identifiable {
 
     var name: String {
         switch self {
-        case .off: "Off"
-        case .matchSystem: "Match System"
-        case .always: "Always"
+        case .off: "Desactivado"
+        case .matchSystem: "Igual que el sistema"
+        case .always: "Siempre"
         }
     }
 }

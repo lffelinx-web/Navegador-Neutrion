@@ -19,16 +19,16 @@ struct ScannerSheet: View {
                         .ignoresSafeArea(edges: .bottom)
                 default:
                     ContentUnavailableView(
-                        "Scanner Unavailable",
+                        "Escáner no disponible",
                         systemImage: "qrcode.viewfinder",
-                        description: Text("Allow camera access in Settings to scan QR codes.")
+                        description: Text("Permite el acceso a la cámara en Ajustes para escanear códigos QR.")
                     )
                 }
             }
-            .navigationTitle("Scan QR Code")
+            .navigationTitle("Escanear código QR")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
             }
         }
         .task {

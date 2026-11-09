@@ -31,7 +31,14 @@ enum ReaderFont: String, Codable, CaseIterable, Identifiable {
 enum ReaderTheme: String, Codable, CaseIterable, Identifiable {
     case auto, light, sepia, dark
     var id: String { rawValue }
-    var name: String { rawValue.capitalized }
+    var name: String {
+        switch self {
+        case .auto: "Automático"
+        case .light: "Claro"
+        case .sepia: "Sepia"
+        case .dark: "Oscuro"
+        }
+    }
 }
 
 struct ReaderSettings: Codable, Equatable {

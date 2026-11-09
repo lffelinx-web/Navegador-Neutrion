@@ -14,23 +14,47 @@ extension LinearGradient {
     )
 }
 
-/// Frosted "glass" surface used for cards, bars and buttons.
+/// Floating controls (toolbars, the Tabs/Spaces island, round buttons).
+/// Liquid Glass on iOS 26; a frosted material on earlier versions.
 struct GlassBackground: ViewModifier {
+    var cornerRadius: CGFloat
+    var interactive = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(iOS 26.0, *) {
+            content.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+        } else {
+            content
+                .background(.ultraThinMaterial, in: shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.12 : 0.6), lineWidth: 0.5))
+                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.08), radius: 12, x: 0, y: 6)
+        }
+    }
+}
+
+/// Cards inside scrolling content. A light translucent fill with no blur or shadow,
+/// so long lists scroll smoothly.
+struct CardBackground: ViewModifier {
     var cornerRadius: CGFloat
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content
-            .background(.ultraThinMaterial, in: shape)
-            .overlay(shape.strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.12 : 0.6), lineWidth: 0.5))
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.07), radius: 14, x: 0, y: 6)
+            .background(shape.fill(colorScheme == .dark ? Color.white.opacity(0.07) : Color.white.opacity(0.6)))
+            .overlay(shape.strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.75), lineWidth: 0.5))
     }
 }
 
 extension View {
-    func glass(cornerRadius: CGFloat = 20) -> some View {
-        modifier(GlassBackground(cornerRadius: cornerRadius))
+    func glass(cornerRadius: CGFloat = 20, interactive: Bool = false) -> some View {
+        modifier(GlassBackground(cornerRadius: cornerRadius, interactive: interactive))
+    }
+
+    func card(cornerRadius: CGFloat = 20) -> some View {
+        modifier(CardBackground(cornerRadius: cornerRadius))
     }
 }
 

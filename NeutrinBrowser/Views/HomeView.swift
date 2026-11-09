@@ -51,10 +51,10 @@ struct HomeView: View {
                         .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(.primary)
                         .frame(width: 42, height: 42)
-                        .glass(cornerRadius: 21)
+                        .glass(cornerRadius: 21, interactive: true)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Settings")
+                .accessibilityLabel("Ajustes")
             }
             NeutrinLogo()
                 .frame(width: 86)
@@ -71,7 +71,7 @@ struct HomeView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.secondary)
-            TextField("Search or enter an address", text: $query)
+            TextField("Busca o escribe una dirección", text: $query)
                 .focused($searchFocused)
                 .keyboardType(.webSearch)
                 .textInputAutocapitalization(.never)
@@ -82,14 +82,14 @@ struct HomeView: View {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
                 }
-                .accessibilityLabel("Clear")
+                .accessibilityLabel("Borrar")
             }
             Button { sheet = .scanner } label: {
                 Image(systemName: "qrcode.viewfinder")
                     .font(.system(size: 20))
                     .foregroundStyle(Color.neutrinBlue)
             }
-            .accessibilityLabel("Scan QR code")
+            .accessibilityLabel("Escanear código QR")
         }
         .padding(.horizontal, 18)
         .frame(height: 54)
@@ -104,15 +104,15 @@ struct HomeView: View {
                 .frame(width: 38, height: 38)
                 .background(Color.indigo, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
-                Text("Private Tab").font(.subheadline.weight(.bold))
-                Text("Neutrin won't remember the pages you visit, and cookies and site data are erased when you close your private tabs.")
+                Text("Pestaña privada").font(.subheadline.weight(.bold))
+                Text("Neutrin no recordará las páginas que visites, y las cookies y datos de los sitios se borran al cerrar tus pestañas privadas.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glass(cornerRadius: 20)
+        .card(cornerRadius: 20)
     }
 
     private var privacyCard: some View {
@@ -127,7 +127,7 @@ struct HomeView: View {
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                     )
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(store.shieldsAreConfigured ? "Shields are protecting you" : "Shields are off")
+                    Text(store.shieldsAreConfigured ? "Shields te está protegiendo" : "Shields está apagado")
                         .font(.subheadline.weight(.bold))
                     HStack(spacing: 10) {
                         Label(store.stats.trackers.formatted(), systemImage: "eye.slash")
@@ -143,10 +143,10 @@ struct HomeView: View {
                     .foregroundStyle(.tertiary)
             }
             .padding(14)
-            .glass(cornerRadius: 22)
+            .card(cornerRadius: 22)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Shields: \(store.stats.trackers) trackers and \(store.stats.ads) ads blocked")
+        .accessibilityLabel("Shields: \(store.stats.trackers) rastreadores y \(store.stats.ads) anuncios bloqueados")
     }
 
     private var quickActions: some View {
@@ -160,7 +160,7 @@ struct HomeView: View {
                             .frame(width: 56, height: 56)
                             .background(action == .explore ? Color.neutrinBlue.opacity(0.12) : .clear,
                                         in: RoundedRectangle(cornerRadius: 17, style: .continuous))
-                            .glass(cornerRadius: 17)
+                            .card(cornerRadius: 17)
                         Text(action.title)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -173,11 +173,11 @@ struct HomeView: View {
 
     private var favoritesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "Favorites") { sheet = .favorites }
+            SectionHeader(title: "Favoritos") { sheet = .favorites }
             Group {
                 if store.favorites.isEmpty {
                     Button { sheet = .addFavorite } label: {
-                        Label("Add your first favorite", systemImage: "plus")
+                        Label("Añade tu primer favorito", systemImage: "plus")
                             .font(.subheadline.weight(.medium))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 28)
@@ -189,10 +189,10 @@ struct HomeView: View {
                                 FavoriteCard(favorite: favorite) { store.open(favorite.url) }
                                     .contextMenu {
                                         Button { store.open(favorite.url, inNewTab: true) } label: {
-                                            Label("Open in New Tab", systemImage: "plus.square.on.square")
+                                            Label("Abrir en pestaña nueva", systemImage: "plus.square.on.square")
                                         }
                                         Button(role: .destructive) { store.removeFavorite(favorite) } label: {
-                                            Label("Remove", systemImage: "trash")
+                                            Label("Quitar", systemImage: "trash")
                                         }
                                     }
                             }
@@ -201,16 +201,16 @@ struct HomeView: View {
                     }
                 }
             }
-            .glass(cornerRadius: 22)
+            .card(cornerRadius: 22)
         }
     }
 
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "Recent") { sheet = .history }
+            SectionHeader(title: "Recientes") { sheet = .history }
             VStack(spacing: 0) {
                 if store.history.isEmpty {
-                    Text("Pages you visit will appear here.")
+                    Text("Las páginas que visites aparecerán aquí.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
@@ -230,7 +230,7 @@ struct HomeView: View {
                     }
                 }
             }
-            .glass(cornerRadius: 22)
+            .card(cornerRadius: 22)
         }
     }
 
@@ -244,17 +244,17 @@ struct HomeView: View {
             HStack(spacing: 8) {
                 Image(systemName: isPrivate ? "eye.slash" : (store.activeSpace?.symbol ?? "square.on.square"))
                     .foregroundStyle(isPrivate ? Color.indigo : Color.primary)
-                Text(isPrivate ? "Private" : (store.activeSpace?.name ?? "Tabs"))
-                Text("· \(count) \(count == 1 ? "tab" : "tabs")").foregroundStyle(.secondary)
+                Text(isPrivate ? "Privado" : (store.activeSpace?.name ?? "Pestañas"))
+                Text("· \(count) \(count == 1 ? "pestaña" : "pestañas")").foregroundStyle(.secondary)
             }
             .font(.subheadline.weight(.semibold))
             .padding(.horizontal, 20)
             .frame(height: 48)
-            .glass(cornerRadius: 24)
+            .glass(cornerRadius: 24, interactive: true)
         }
         .buttonStyle(.plain)
         .padding(.bottom, 8)
-        .accessibilityLabel("Show tabs and spaces")
+        .accessibilityLabel("Mostrar pestañas y espacios")
     }
 
     // MARK: - Actions
@@ -310,14 +310,14 @@ private enum QuickAction: CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .explore: "Explore"
-        case .favorites: "Favorites"
-        case .read: "Read"
-        case .watch: "Watch"
-        case .images: "Images"
-        case .tools: "Tools"
+        case .explore: "Explorar"
+        case .favorites: "Favoritos"
+        case .read: "Leer"
+        case .watch: "Ver"
+        case .images: "Imágenes"
+        case .tools: "Herramientas"
         case .apps: "Apps"
-        case .add: "Add"
+        case .add: "Añadir"
         }
     }
 

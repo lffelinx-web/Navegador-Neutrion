@@ -31,8 +31,8 @@ enum FilterListConverter {
 
         var errorDescription: String? {
             switch self {
-            case .scriptMissing: "The filter converter is missing from the app."
-            case .failed(let reason): "Couldn't convert the list (\(reason))."
+            case .scriptMissing: "Falta el conversor de filtros en la app."
+            case .failed(let reason): "No se pudo convertir la lista (\(reason))."
             }
         }
     }
@@ -43,7 +43,7 @@ enum FilterListConverter {
               let source = try? String(contentsOf: url, encoding: .utf8) else {
             throw ConversionError.scriptMissing
         }
-        guard let context = JSContext() else { throw ConversionError.failed("no JavaScript context") }
+        guard let context = JSContext() else { throw ConversionError.failed("sin contexto de JavaScript") }
 
         var scriptError: String?
         context.exceptionHandler = { _, exception in
@@ -56,7 +56,7 @@ enum FilterListConverter {
               let result = convert.call(withArguments: [text]),
               scriptError == nil,
               let json = result.toString() else {
-            throw ConversionError.failed(scriptError ?? "no result")
+            throw ConversionError.failed(scriptError ?? "sin resultado")
         }
         return try JSONDecoder().decode(Output.self, from: Data(json.utf8))
     }

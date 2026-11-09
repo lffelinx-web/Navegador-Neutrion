@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// "Tabs & Spaces": switch spaces, browse tabs as cards, manage spaces.
+/// "Pestañas y espacios": switch spaces, browse tabs as cards, manage spaces.
 struct TabsSpacesView: View {
     @EnvironmentObject private var store: BrowserStore
     @Environment(\.dismiss) private var dismiss
@@ -20,8 +20,6 @@ struct TabsSpacesView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    header
-                    modePicker
                     switch mode {
                     case .tabs:
                         spacesStrip
@@ -37,6 +35,23 @@ struct TabsSpacesView: View {
                 .padding(.bottom, 110)
             }
             .scrollDismissesKeyboard(.interactively)
+            // Title and the Tabs/Private/Spaces island float above the content.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: 14) {
+                    header
+                    modePicker
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 12)
+                .background {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .mask(LinearGradient(stops: [.init(color: .black, location: 0.65), .init(color: .clear, location: 1)],
+                                             startPoint: .top, endPoint: .bottom))
+                        .ignoresSafeArea(edges: .top)
+                }
+            }
 
             bottomBar
         }
@@ -51,11 +66,11 @@ struct TabsSpacesView: View {
             if store.isPrivateBrowsing { mode = .privateTabs }
         }
         .confirmationDialog(
-            "Delete \"\(spacePendingDeletion?.name ?? "")\"?",
+            "¿Eliminar «\(spacePendingDeletion?.name ?? "")»?",
             isPresented: Binding(get: { spacePendingDeletion != nil }, set: { if !$0 { spacePendingDeletion = nil } }),
             titleVisibility: .visible
         ) {
-            Button("Delete Space and Its Tabs", role: .destructive) {
+            Button("Eliminar el espacio y sus pestañas", role: .destructive) {
                 if let space = spacePendingDeletion {
                     withAnimation { store.deleteSpace(space.id) }
                 }
@@ -67,32 +82,34 @@ struct TabsSpacesView: View {
 
     private var header: some View {
         HStack {
-            Text("Tabs & Spaces")
-                .font(.system(size: 30, weight: .bold))
+            Text("Pestañas y espacios")
+                .font(.system(size: 28, weight: .bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             Spacer()
             Menu {
-                Button { dismiss() } label: { Label("Done", systemImage: "checkmark") }
+                Button { dismiss() } label: { Label("Listo", systemImage: "checkmark") }
                 Button(role: .destructive) {
                     withAnimation { store.closeAllTabs(in: store.activeSpaceID) }
                 } label: {
-                    Label("Close All Tabs in \(store.activeSpace?.name ?? "Space")", systemImage: "xmark.square")
+                    Label("Close All Tabs in \(store.activeSpace?.name ?? "Espacio")", systemImage: "xmark.square")
                 }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 42, height: 42)
-                    .glass(cornerRadius: 21)
+                    .glass(cornerRadius: 21, interactive: true)
             }
-            .accessibilityLabel("More")
+            .accessibilityLabel("Más")
         }
     }
 
     private var modePicker: some View {
         HStack(spacing: 4) {
-            modeButton(.tabs, title: "Tabs", symbol: "square.on.square")
-            modeButton(.privateTabs, title: "Private", symbol: "eye.slash")
-            modeButton(.spaces, title: "Spaces", symbol: "square.stack.3d.up")
+            modeButton(.tabs, title: "Pestañas", symbol: "square.on.square")
+            modeButton(.privateTabs, title: "Privado", symbol: "eye.slash")
+            modeButton(.spaces, title: "Espacios", symbol: "square.stack.3d.up")
         }
         .padding(4)
         .glass(cornerRadius: 24)
@@ -122,7 +139,7 @@ struct TabsSpacesView: View {
 
     private var spacesStrip: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "Spaces", actionTitle: "Manage") {
+            SectionHeader(title: "Espacios", actionTitle: "Gestionar") {
                 withAnimation(.snappy) { mode = .spaces }
             }
             ScrollView(.horizontal, showsIndicators: false) {
@@ -157,8 +174,8 @@ struct TabsSpacesView: View {
         let count = store.tabs(in: store.activeSpaceID).count
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(store.activeSpace?.name ?? "Tabs").font(.title3.weight(.bold))
-                Text("· \(count) \(count == 1 ? "tab" : "tabs")")
+                Text(store.activeSpace?.name ?? "Pestañas").font(.title3.weight(.bold))
+                Text("· \(count) \(count == 1 ? "pestaña" : "pestañas")")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -172,19 +189,19 @@ struct TabsSpacesView: View {
                         .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(.primary)
                 }
-                .accessibilityLabel(isSearching ? "Stop searching" : "Search tabs")
+                .accessibilityLabel(isSearching ? "Dejar de buscar" : "Buscar pestañas")
             }
 
             if isSearching {
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search tabs", text: $searchText)
+                    TextField("Buscar pestañas", text: $searchText)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
                 .padding(.horizontal, 14)
                 .frame(height: 44)
-                .glass(cornerRadius: 22)
+                .card(cornerRadius: 22)
             }
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 14) {
@@ -212,13 +229,13 @@ struct TabsSpacesView: View {
         let tabs = store.privateTabs
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("Private").font(.title3.weight(.bold))
-                Text("· \(tabs.count) \(tabs.count == 1 ? "tab" : "tabs")")
+                Text("Privado").font(.title3.weight(.bold))
+                Text("· \(tabs.count) \(tabs.count == 1 ? "pestaña" : "pestañas")")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
                 if !tabs.isEmpty {
-                    Button("Close All", role: .destructive) {
+                    Button("Cerrar todas", role: .destructive) {
                         withAnimation(.snappy) { store.closeAllPrivateTabs() }
                     }
                     .font(.subheadline.weight(.semibold))
@@ -230,16 +247,16 @@ struct TabsSpacesView: View {
                     Image(systemName: "eye.slash")
                         .font(.system(size: 30, weight: .semibold))
                         .foregroundStyle(Color.indigo)
-                    Text("Browse privately")
+                    Text("Navega en privado")
                         .font(.headline)
-                    Text("Private tabs don't save history, and their cookies and site data are erased when you close them. Shields stay on.")
+                    Text("Las pestañas privadas no guardan historial, y sus cookies y datos se borran al cerrarlas. Shields sigue activo.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity)
-                .glass(cornerRadius: 22)
+                .card(cornerRadius: 22)
             } else {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 14) {
                     ForEach(tabs) { tab in
@@ -276,7 +293,7 @@ struct TabsSpacesView: View {
                         .background(Color.neutrinBlue.opacity(0.12), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(space.name).font(.headline)
-                        Text("\(count) \(count == 1 ? "tab" : "tabs")")
+                        Text("\(count) \(count == 1 ? "pestaña" : "pestañas")")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -285,15 +302,15 @@ struct TabsSpacesView: View {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.neutrinBlue)
                     }
                     Menu {
-                        Button { editingSpace = space } label: { Label("Edit", systemImage: "pencil") }
+                        Button { editingSpace = space } label: { Label("Editar", systemImage: "pencil") }
                         Button(role: .destructive) {
                             withAnimation { store.closeAllTabs(in: space.id) }
                         } label: {
-                            Label("Close All Tabs", systemImage: "xmark.square")
+                            Label("Cerrar todas las pestañas", systemImage: "xmark.square")
                         }
                         if store.spaces.count > 1 {
                             Button(role: .destructive) { spacePendingDeletion = space } label: {
-                                Label("Delete Space", systemImage: "trash")
+                                Label("Eliminar espacio", systemImage: "trash")
                             }
                         }
                     } label: {
@@ -304,7 +321,7 @@ struct TabsSpacesView: View {
                     }
                 }
                 .padding(14)
-                .glass(cornerRadius: 20)
+                .card(cornerRadius: 20)
                 .contentShape(Rectangle())
                 .onTapGesture {
                     withAnimation(.snappy) {
@@ -324,14 +341,14 @@ struct TabsSpacesView: View {
                 store.newTab(isPrivate: mode == .privateTabs)
                 dismiss()
             } label: {
-                Label(mode == .privateTabs ? "New Private Tab" : "New Tab", systemImage: "plus")
+                Label(mode == .privateTabs ? "Nueva pestaña privada" : "Nueva pestaña", systemImage: "plus")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
             }
             if mode != .privateTabs {
                 Divider().frame(height: 24)
                 Button { showNewSpace = true } label: {
-                    Label("New Space", systemImage: "square.stack.3d.up")
+                    Label("Nuevo espacio", systemImage: "square.stack.3d.up")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
                 }
@@ -365,7 +382,7 @@ private struct SpaceCard: View {
                 }
                 Spacer(minLength: 6)
                 Text(space.name).font(.subheadline.weight(.bold)).lineLimit(1)
-                Text("\(tabCount) \(tabCount == 1 ? "tab" : "tabs")")
+                Text("\(tabCount) \(tabCount == 1 ? "pestaña" : "pestañas")")
                     .font(.caption)
                     .foregroundStyle(isSelected ? Color.neutrinBlue : .secondary)
             }
@@ -373,7 +390,7 @@ private struct SpaceCard: View {
             .frame(width: 116, height: 92, alignment: .leading)
             .background(isSelected ? Color.neutrinBlue.opacity(0.10) : .clear,
                         in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .glass(cornerRadius: 18)
+            .card(cornerRadius: 18)
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(isSelected ? Color.neutrinBlue : .clear, lineWidth: 2)
@@ -407,7 +424,7 @@ private struct TabCard: View {
                     }
                     .buttonStyle(.plain)
                     .padding(6)
-                    .accessibilityLabel("Close \(tab.displayTitle)")
+                    .accessibilityLabel("Cerrar \(tab.displayTitle)")
                 }
 
             HStack(alignment: .top, spacing: 7) {
@@ -419,7 +436,7 @@ private struct TabCard: View {
                     Text(tab.displayTitle)
                         .font(.footnote.weight(.semibold))
                         .lineLimit(2)
-                    Text(tab.url?.displayHost ?? "Start Page")
+                    Text(tab.url?.displayHost ?? "Página de inicio")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -431,7 +448,7 @@ private struct TabCard: View {
             .padding(.top, 10)
         }
         .padding(6)
-        .glass(cornerRadius: 20)
+        .card(cornerRadius: 20)
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(isActive ? Color.neutrinBlue : .clear, lineWidth: 2)

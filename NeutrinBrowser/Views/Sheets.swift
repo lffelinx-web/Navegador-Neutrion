@@ -14,7 +14,7 @@ struct FavoritesView: View {
                         FavoriteCard(favorite: favorite) { onOpen(favorite.url) }
                             .contextMenu {
                                 Button(role: .destructive) { store.removeFavorite(favorite) } label: {
-                                    Label("Remove", systemImage: "trash")
+                                    Label("Quitar", systemImage: "trash")
                                 }
                             }
                     }
@@ -23,17 +23,17 @@ struct FavoritesView: View {
             }
             .overlay {
                 if store.favorites.isEmpty {
-                    ContentUnavailableView("No Favorites", systemImage: "star",
-                                           description: Text("Add pages you love to open them in one tap."))
+                    ContentUnavailableView("Sin favoritos", systemImage: "star",
+                                           description: Text("Añade tus páginas preferidas para abrirlas con un toque."))
                 }
             }
-            .navigationTitle("Favorites")
+            .navigationTitle("Favoritos")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Listo") { dismiss() } }
                 ToolbarItem(placement: .primaryAction) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add favorite")
+                        .accessibilityLabel("Añadir favorito")
                 }
             }
             .sheet(isPresented: $showAdd) { AddFavoriteView().environmentObject(store) }
@@ -56,13 +56,13 @@ struct AddFavoriteView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Title", text: $title)
-                    TextField("Address", text: $address)
+                    TextField("Título", text: $title)
+                    TextField("Dirección", text: $address)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
-                Section("Cover") {
+                Section("Portada") {
                     HStack(spacing: 12) {
                         ForEach(Artwork.allCases) { item in
                             Button { artwork = item } label: {
@@ -75,18 +75,18 @@ struct AddFavoriteView: View {
                                     )
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(item.rawValue.capitalized)
+                            .accessibilityLabel(item.name)
                         }
                     }
                     .padding(.vertical, 4)
                 }
             }
-            .navigationTitle("Add Favorite")
+            .navigationTitle("Añadir favorito")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button("Guardar") {
                         guard let url = resolvedURL else { return }
                         let name = title.trimmingCharacters(in: .whitespaces)
                         store.addFavorite(title: name.isEmpty ? url.displayHost : name, url: url, artwork: artwork)
@@ -124,21 +124,21 @@ struct HistoryView: View {
             }
             .overlay {
                 if store.history.isEmpty {
-                    ContentUnavailableView("No Recent Pages", systemImage: "clock",
-                                           description: Text("Pages you visit will appear here."))
+                    ContentUnavailableView("Sin páginas recientes", systemImage: "clock",
+                                           description: Text("Las páginas que visites aparecerán aquí."))
                 }
             }
-            .navigationTitle("Recent")
+            .navigationTitle("Recientes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Listo") { dismiss() } }
                 ToolbarItem(placement: .destructiveAction) {
-                    Button("Clear", role: .destructive) { confirmClear = true }
+                    Button("Borrar", role: .destructive) { confirmClear = true }
                         .disabled(store.history.isEmpty)
                 }
             }
-            .confirmationDialog("Clear all recent pages?", isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("Clear History", role: .destructive) { store.clearHistory() }
+            .confirmationDialog("¿Borrar todas las páginas recientes?", isPresented: $confirmClear, titleVisibility: .visible) {
+                Button("Borrar historial", role: .destructive) { store.clearHistory() }
             }
         }
     }
@@ -158,7 +158,7 @@ struct SettingsView: View {
                         NeutrinLogo().frame(width: 56)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Neutrin Browser").font(.headline)
-                            Text("A calmer, more private web.").font(.subheadline).foregroundStyle(.secondary)
+                            Text("Una web más tranquila y privada.").font(.subheadline).foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 6)
@@ -166,47 +166,47 @@ struct SettingsView: View {
 
                 Section {
                     HStack(spacing: 12) {
-                        StatCell(value: store.stats.trackers, title: "Trackers")
-                        StatCell(value: store.stats.ads, title: "Ads")
+                        StatCell(value: store.stats.trackers, title: "Rastreadores")
+                        StatCell(value: store.stats.ads, title: "Anuncios")
                     }
                     .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
-                    Toggle("Block Ads", isOn: $store.privacySettings.blockAds)
-                    Toggle("Hide Empty Ad Spaces", isOn: $store.privacySettings.hideAdPlaceholders)
+                    Toggle("Bloquear anuncios", isOn: $store.privacySettings.blockAds)
+                    Toggle("Ocultar huecos de anuncios", isOn: $store.privacySettings.hideAdPlaceholders)
                         .disabled(!store.privacySettings.blockAds)
-                    Toggle("Block Trackers", isOn: $store.privacySettings.blockTrackers)
+                    Toggle("Bloquear rastreadores", isOn: $store.privacySettings.blockTrackers)
                     NavigationLink {
                         FilterListsView(manager: store.filterLists)
                     } label: {
-                        LabeledContent("Filter Lists", value: "EasyList, EasyPrivacy")
+                        LabeledContent("Listas de filtros", value: "EasyList, EasyPrivacy")
                     }
                 } header: {
                     Text("Shields")
                 } footer: {
-                    Text("Blocked since \(store.stats.since.formatted(date: .abbreviated, time: .omitted)). Neutrin blocks known ad and tracking services before they load, so pages are faster and companies can't follow you from site to site.")
+                    Text("Bloqueando desde el \(store.stats.since.formatted(date: .abbreviated, time: .omitted)). Neutrin bloquea servicios conocidos de anuncios y rastreo antes de que carguen, así las páginas van más rápido y las empresas no pueden seguirte de un sitio a otro.")
                 }
 
                 Section {
-                    Toggle("Remove Tracking from Links", isOn: $store.privacySettings.removeTrackingParameters)
+                    Toggle("Quitar rastreo de los enlaces", isOn: $store.privacySettings.removeTrackingParameters)
                     Toggle("Global Privacy Control", isOn: $store.privacySettings.globalPrivacyControl)
-                    Toggle("Upgrade to HTTPS", isOn: $store.privacySettings.upgradeToHTTPS)
+                    Toggle("Cambiar a HTTPS", isOn: $store.privacySettings.upgradeToHTTPS)
                     NavigationLink {
                         ShieldsExceptionsView()
                     } label: {
-                        LabeledContent("Sites with Shields Down", value: "\(store.shieldsDownHosts.count)")
+                        LabeledContent("Sitios sin Shields", value: "\(store.shieldsDownHosts.count)")
                     }
                 } header: {
-                    Text("Privacy")
+                    Text("Privacidad")
                 } footer: {
-                    Text("Removes utm_, fbclid, gclid and similar tags from links. Global Privacy Control tells websites not to sell or share your data. HTTPS upgrades apply to new tabs.")
+                    Text("Quita utm_, fbclid, gclid y etiquetas similares de los enlaces. Global Privacy Control pide a los sitios que no vendan ni compartan tus datos. El cambio a HTTPS se aplica a las pestañas nuevas.")
                 }
 
-                Section("Search Engine") {
-                    Picker("Search Engine", selection: $store.searchEngine) {
+                Section("Buscador") {
+                    Picker("Buscador", selection: $store.searchEngine) {
                         ForEach(SearchEngine.allCases) { engine in
                             HStack {
                                 Text(engine.name)
                                 if engine.isPrivate {
-                                    Text("Private")
+                                    Text("Privado")
                                         .font(.caption2.weight(.bold))
                                         .foregroundStyle(Color.neutrinBlue)
                                         .padding(.horizontal, 6)
@@ -222,65 +222,65 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("Dark Mode for Websites", selection: $store.privacySettings.websiteDarkMode) {
+                    Picker("Modo oscuro en sitios web", selection: $store.privacySettings.websiteDarkMode) {
                         ForEach(WebsiteDarkMode.allCases) { mode in
                             Text(mode.name).tag(mode)
                         }
                     }
                 } header: {
-                    Text("Appearance")
+                    Text("Apariencia")
                 } footer: {
-                    Text("Shows light websites in dark colors. Sites that already have a dark design are left as they are.")
+                    Text("Muestra los sitios claros con colores oscuros. Los sitios que ya tienen diseño oscuro se quedan como están.")
                 }
 
                 Section {
-                    Picker("Reader Font", selection: $store.readerSettings.font) {
+                    Picker("Fuente de lectura", selection: $store.readerSettings.font) {
                         ForEach(ReaderFont.allCases) { font in Text(font.name).tag(font) }
                     }
-                    Picker("Reader Theme", selection: $store.readerSettings.theme) {
+                    Picker("Tema de lectura", selection: $store.readerSettings.theme) {
                         ForEach(ReaderTheme.allCases) { theme in Text(theme.name).tag(theme) }
                     }
-                    Stepper("Text Size: \(Int(store.readerSettings.fontSize))",
+                    Stepper("Tamaño del texto: \(Int(store.readerSettings.fontSize))",
                             value: $store.readerSettings.fontSize,
                             in: ReaderSettings.fontSizeRange)
                 } header: {
-                    Text("Reader Mode")
+                    Text("Modo lectura")
                 } footer: {
-                    Text("Tap the page icon in the address bar to read articles without ads, pop-ups or clutter.")
+                    Text("Toca el icono de página en la barra de direcciones para leer artículos sin anuncios, ventanas emergentes ni distracciones.")
                 }
 
-                Section("Data") {
-                    Button("Clear History", role: .destructive) {
+                Section("Datos") {
+                    Button("Borrar historial", role: .destructive) {
                         store.clearHistory()
-                        message = "History cleared."
+                        message = "Historial borrado."
                     }
-                    Button("Clear Cookies and Website Data", role: .destructive) {
+                    Button("Borrar cookies y datos de sitios", role: .destructive) {
                         confirmClearData = true
                     }
-                    Button("Reset Shields Statistics") {
+                    Button("Reiniciar estadísticas de Shields") {
                         store.resetStats()
-                        message = "Statistics reset."
+                        message = "Estadísticas reiniciadas."
                     }
                 }
 
                 Section {
-                    LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
-                    LabeledContent("Reader engine", value: "Mozilla Readability")
+                    LabeledContent("Versión", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
+                    LabeledContent("Motor de lectura", value: "Mozilla Readability")
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("Ajustes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Listo") { dismiss() } }
             }
-            .confirmationDialog("You'll be signed out of websites.", isPresented: $confirmClearData, titleVisibility: .visible) {
-                Button("Clear Cookies and Data", role: .destructive) {
+            .confirmationDialog("Se cerrará tu sesión en los sitios web.", isPresented: $confirmClearData, titleVisibility: .visible) {
+                Button("Borrar cookies y datos", role: .destructive) {
                     store.clearWebsiteData()
-                    message = "Website data cleared."
+                    message = "Datos de sitios borrados."
                 }
             }
             .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
-                Button("OK", role: .cancel) {}
+                Button("Aceptar", role: .cancel) {}
             }
         }
     }
@@ -295,7 +295,7 @@ private struct StatCell: View {
             Text(value.formatted())
                 .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundStyle(LinearGradient.neutrin)
-            Text("\(title) blocked")
+            Text("\(title) bloqueados")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -314,7 +314,7 @@ struct FilterListsView: View {
                     FilterListRow(source: source, manager: manager)
                 }
             } footer: {
-                Text("Neutrin's built-in list always works offline. These community lists add tens of thousands of rules and update automatically every few days. EasyList and EasyPrivacy are maintained by the EasyList authors (easylist.to).")
+                Text("La lista propia de Neutrin siempre funciona sin conexión. Estas listas comunitarias añaden decenas de miles de reglas y se actualizan solas cada pocos días. EasyList y EasyPrivacy las mantienen los autores de EasyList (easylist.to).")
             }
 
             Section {
@@ -322,7 +322,7 @@ struct FilterListsView: View {
                     Task { await manager.updateAll() }
                 } label: {
                     HStack {
-                        Text("Update Now")
+                        Text("Actualizar ahora")
                         Spacer()
                         if !manager.updating.isEmpty { ProgressView() }
                     }
@@ -330,7 +330,7 @@ struct FilterListsView: View {
                 .disabled(!manager.updating.isEmpty)
             }
         }
-        .navigationTitle("Filter Lists")
+        .navigationTitle("Listas de filtros")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -350,15 +350,15 @@ private struct FilterListRow: View {
             }
             Group {
                 if manager.updating.contains(source.id) {
-                    Label("Updating…", systemImage: "arrow.down.circle")
+                    Label("Actualizando…", systemImage: "arrow.down.circle")
                 } else if let error = sub.lastError {
                     Label(error, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
                 } else if let updated = sub.lastUpdated {
-                    Label("\((sub.networkRuleCount + sub.cosmeticRuleCount).formatted()) rules · updated \(updated.formatted(.relative(presentation: .named)))",
+                    Label("\((sub.networkRuleCount + sub.cosmeticRuleCount).formatted()) reglas · actualizada \(updated.formatted(.relative(presentation: .named)))",
                           systemImage: "checkmark.circle")
                 } else if sub.isEnabled {
-                    Label("Waiting to download", systemImage: "clock")
+                    Label("Pendiente de descarga", systemImage: "clock")
                 }
             }
             .font(.caption)
@@ -383,11 +383,11 @@ struct ShieldsExceptionsView: View {
         }
         .overlay {
             if hosts.isEmpty {
-                ContentUnavailableView("Shields Are Up Everywhere", systemImage: "shield.lefthalf.filled",
-                                       description: Text("Sites where you turn Shields off will appear here."))
+                ContentUnavailableView("Shields está activo en todos los sitios", systemImage: "shield.lefthalf.filled",
+                                       description: Text("Aquí aparecerán los sitios donde apagues Shields."))
             }
         }
-        .navigationTitle("Shields Down")
+        .navigationTitle("Shields desactivado")
         .toolbar { EditButton() }
     }
 }
@@ -416,10 +416,10 @@ struct SpaceEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Name") {
-                    TextField("Space name", text: $name)
+                Section("Nombre") {
+                    TextField("Nombre del espacio", text: $name)
                 }
-                Section("Icon") {
+                Section("Icono") {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
                         ForEach(Self.symbols, id: \.self) { item in
                             let selected = item == symbol
@@ -439,12 +439,12 @@ struct SpaceEditorView: View {
                     .padding(.vertical, 6)
                 }
             }
-            .navigationTitle(space == nil ? "New Space" : "Edit Space")
+            .navigationTitle(space == nil ? "Nuevo espacio" : "Editar espacio")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(space == nil ? "Create" : "Save") {
+                    Button(space == nil ? "Crear" : "Guardar") {
                         if var existing = space {
                             existing.name = trimmedName
                             existing.symbol = symbol

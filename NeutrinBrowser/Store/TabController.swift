@@ -20,6 +20,8 @@ final class TabController: NSObject, ObservableObject {
     @Published private(set) var blockedItems: [BlockedItem] = []
     @Published private(set) var isReaderAvailable = false
     @Published private(set) var hasOnlySecureContent = true
+    /// The toolbar shrinks to a small address pill while the user scrolls down a page.
+    @Published private(set) var isToolbarCollapsed = false
 
     var onChange: ((TabController) -> Void)?
     var onVisit: ((TabController) -> Void)?
@@ -27,6 +29,8 @@ final class TabController: NSObject, ObservableObject {
     var onBlocked: (([BlockedItem]) -> Void)?
 
     private var observations: [NSKeyValueObservation] = []
+    private var lastScrollY: CGFloat = 0
+    private var forcedLandscape = false
 
     /// Space left at the bottom of pages for the floating toolbar.
     static let toolbarInset: CGFloat = 76
@@ -45,6 +49,8 @@ final class TabController: NSObject, ObservableObject {
         configuration.allowsInlineMediaPlayback = true
         configuration.websiteDataStore = isPrivate ? PrivateSession.dataStore : .default()
         configuration.upgradeKnownHostsToHTTPS = store.privacySettings.upgradeToHTTPS
+        // Lets sites like YouTube use real fullscreen, which we rotate to landscape.
+        configuration.preferences.isElementFullscreenEnabled = true
         contentController = configuration.userContentController
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
@@ -68,6 +74,8 @@ final class TabController: NSObject, ObservableObject {
             webView.observe(\.isLoading) { [weak self] _, _ in self?.sync() },
             webView.observe(\.estimatedProgress) { [weak self] _, _ in self?.sync() },
             webView.observe(\.hasOnlySecureContent) { [weak self] _, _ in self?.sync() },
+            webView.observe(\.fullscreenState) { [weak self] _, _ in self?.fullscreenStateChanged() },
+            webView.scrollView.observe(\.contentOffset) { [weak self] scrollView, _ in self?.scrollViewDidScroll(scrollView) },
         ]
     }
 
@@ -163,6 +171,62 @@ final class TabController: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Toolbar & fullscreen
+
+    func setToolbarCollapsed(_ collapsed: Bool) {
+        if isToolbarCollapsed != collapsed { isToolbarCollapsed = collapsed }
+    }
+
+    /// Collapses the toolbar when the user scrolls down and brings it back when
+    /// they scroll up or reach the top or bottom of the page.
+    private func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        let y = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        defer { lastScrollY = y }
+        // Ignore programmatic scrolling (page loads, anchors) – only react to the user.
+        guard scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating else { return }
+        let bottom = scrollView.contentSize.height - scrollView.bounds.height
+            + scrollView.adjustedContentInset.top + scrollView.adjustedContentInset.bottom
+        let delta = y - lastScrollY
+        if y < 24 || y > bottom - 24 {
+            setToolbarCollapsed(false)
+        } else if delta > 4 {
+            setToolbarCollapsed(true)
+        } else if delta < -10 {
+            setToolbarCollapsed(false)
+        }
+    }
+
+    /// Fullscreen video: turn to landscape for wide videos, back to portrait afterwards.
+    private func fullscreenStateChanged() {
+        switch webView.fullscreenState {
+        case .enteringFullscreen, .inFullscreen:
+            guard !forcedLandscape else { return }
+            let script = """
+            (() => {
+              const el = document.fullscreenElement || document.webkitFullscreenElement;
+              const video = el ? (el.tagName === "VIDEO" ? el : el.querySelector("video")) : document.querySelector("video");
+              return video && video.videoHeight ? video.videoWidth / video.videoHeight : 0;
+            })()
+            """
+            webView.evaluateJavaScript(script) { [weak self] result, _ in
+                guard let self else { return }
+                let ratio = (result as? Double) ?? 0
+                // Unknown size (0) is treated as a normal wide video.
+                if ratio == 0 || ratio > 1.05 {
+                    self.forcedLandscape = true
+                    DeviceOrientation.request(.landscapeRight)
+                }
+            }
+        case .notInFullscreen:
+            if forcedLandscape {
+                forcedLandscape = false
+                DeviceOrientation.request(.portrait)
+            }
+        default:
+            break
+        }
+    }
+
     // MARK: - Snapshots & state
 
     func captureSnapshot() {
@@ -255,6 +319,7 @@ extension TabController: WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         blockedItems = []
         isReaderAvailable = false
+        setToolbarCollapsed(false)
         sync()
     }
 
@@ -340,5 +405,17 @@ enum ScriptLibrary {
 
     static func darkMode(enabled: Bool) -> String {
         darkModeTemplate.replacingOccurrences(of: "__NEUTRIN_DARK_ENABLED__", with: enabled ? "true" : "false")
+    }
+}
+
+/// Rotates the app's window, e.g. into landscape for a fullscreen video.
+@MainActor
+enum DeviceOrientation {
+    static func request(_ orientations: UIInterfaceOrientationMask) {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else { return }
+        scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: orientations)) { _ in }
     }
 }

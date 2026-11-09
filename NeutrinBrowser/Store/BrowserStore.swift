@@ -22,7 +22,7 @@ final class BrowserStore: ObservableObject {
     @Published private(set) var stats: BlockStats
     /// Sites where the user turned Shields off.
     @Published private(set) var shieldsDownHosts: Set<String>
-    /// Set by the UI so "Match System" website dark mode can follow the phone.
+    /// Set by the UI so "Igual que el sistema" website dark mode can follow the phone.
     @Published private(set) var systemIsDark = false
 
     let contentBlocker = ContentBlocker()
@@ -468,9 +468,9 @@ final class BrowserStore: ObservableObject {
         let work = BrowserSpace(name: "Trabajo", symbol: "briefcase")
         let study = BrowserSpace(name: "Estudio", symbol: "graduationcap")
         let favorites = [
-            Favorite(title: "Design Ideas", url: URL(string: "https://dribbble.com")!, artwork: .mountains),
-            Favorite(title: "Travel", url: URL(string: "https://www.lonelyplanet.com")!, artwork: .leaf),
-            Favorite(title: "Reading", url: URL(string: "https://longreads.com")!, artwork: .waves),
+            Favorite(title: "Ideas de diseño", url: URL(string: "https://dribbble.com")!, artwork: .mountains),
+            Favorite(title: "Viajes", url: URL(string: "https://www.lonelyplanet.com")!, artwork: .leaf),
+            Favorite(title: "Lectura", url: URL(string: "https://longreads.com")!, artwork: .waves),
         ]
         return PersistedState(
             spaces: [personal, work, study], tabs: [], activeSpaceID: personal.id, activeTabID: nil,

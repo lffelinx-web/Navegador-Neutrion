@@ -21,9 +21,12 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: store.activeTab?.url == nil)
-        .fullScreenCover(isPresented: $showTabs) {
+        // A sheet so it can be closed by swiping down.
+        .sheet(isPresented: $showTabs) {
             TabsSpacesView()
                 .environmentObject(store)
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(32)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

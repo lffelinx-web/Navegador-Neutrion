@@ -15,6 +15,7 @@ struct ArtworkView: View {
             }
         }
         .clipped()
+        .drawingGroup() // rasterize the vector art once instead of every frame
         .accessibilityHidden(true)
     }
 

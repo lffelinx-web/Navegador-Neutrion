@@ -8,7 +8,7 @@ enum ReaderTemplate {
     static func html(for article: ReaderArticle, settings: ReaderSettings) -> String {
         let host = article.url?.displayHost ?? ""
         let label = (article.siteName?.isEmpty == false ? article.siteName! : host)
-        var meta = ["\(article.minutesToRead) min read"]
+        var meta = ["\(article.minutesToRead) min de lectura"]
         if let byline = article.byline, !byline.isEmpty { meta.insert(byline, at: 0) }
         if !host.isEmpty { meta.append(host) }
 
@@ -21,7 +21,7 @@ enum ReaderTemplate {
 
         return """
         <!doctype html>
-        <html data-theme="\(settings.theme.rawValue)" data-font="\(settings.font.rawValue)" style="--font-size:\(Int(settings.fontSize))px">
+        <html lang="es" data-theme="\(settings.theme.rawValue)" data-font="\(settings.font.rawValue)" style="--font-size:\(Int(settings.fontSize))px">
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">

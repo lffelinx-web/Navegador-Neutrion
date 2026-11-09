@@ -196,15 +196,18 @@ final class ContentRuleCompilationTests: XCTestCase {
 
     /// Downloads the real lists; skipped when there's no network.
     func testRealEasyListsCompile() async throws {
+        var skipped = 0
         for (name, address) in [("easylist", "https://easylist.to/easylist/easylist.txt"),
                                 ("easyprivacy", "https://easylist.to/easylist/easyprivacy.txt"),
                                 ("easylist-cookie", "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt")] {
             var request = URLRequest(url: URL(string: address)!)
-            request.timeoutInterval = 30
+            request.timeoutInterval = 45
             guard let (data, response) = try? await URLSession.shared.data(for: request),
                   (response as? HTTPURLResponse)?.statusCode == 200,
                   let text = String(data: data, encoding: .utf8) else {
-                throw XCTSkip("Couldn't download \(name)")
+                print("Neutrin: couldn't download \(name), skipping it")
+                skipped += 1
+                continue
             }
             let started = Date()
             let output = try await Task.detached { try FilterListConverter.convert(text) }.value
@@ -217,5 +220,6 @@ final class ContentRuleCompilationTests: XCTestCase {
                   + "convert \(String(format: "%.1f", converted.timeIntervalSince(started)))s, "
                   + "compile \(String(format: "%.1f", Date().timeIntervalSince(converted)))s")
         }
+        if skipped == 3 { throw XCTSkip("Couldn't download any list") }
     }
 }

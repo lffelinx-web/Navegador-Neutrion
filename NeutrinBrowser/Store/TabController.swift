@@ -73,6 +73,8 @@ final class TabController: NSObject, ObservableObject {
         contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.colors)
         // Pages follow the phone's appearance even when the browser chrome is tinted.
         webView.overrideUserInterfaceStyle = store.systemIsDark ? .dark : .light
+        // Show HDR photos and icons at normal brightness.
+        webView.traitOverrides.imageDynamicRange = .standard
         installUserScripts()
 
         webView.allowsBackForwardNavigationGestures = true
@@ -195,6 +197,17 @@ final class TabController: NSObject, ObservableObject {
     }
 
     // MARK: - Toolbar & fullscreen
+
+    /// Height of the status bar the page scrolls under (iOS 26); WebKit keeps fixed
+    /// headers below it.
+    func setObscuredTop(_ top: CGFloat) {
+        if #available(iOS 26.0, *) {
+            var insets = webView.obscuredContentInsets
+            guard insets.top != top else { return }
+            insets.top = top
+            webView.obscuredContentInsets = insets
+        }
+    }
 
     func setSystemAppearance(isDark: Bool) {
         webView.overrideUserInterfaceStyle = isDark ? .dark : .light

@@ -123,14 +123,14 @@ struct TabsSpacesView: View {
                 Button(role: .destructive) {
                     withAnimation { store.closeAllTabs(in: store.activeSpaceID) }
                 } label: {
-                    Label("Close All Tabs in \(store.activeSpace?.name ?? "Espacio")", systemImage: "xmark.square")
+                    Label("Cerrar todas las pestañas de \(store.activeSpace?.name ?? "este espacio")", systemImage: "xmark.square")
                 }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 42, height: 42)
-                    .glass(cornerRadius: 21, interactive: true)
+                    .glass(cornerRadius: 21)
             }
             .accessibilityLabel("Más")
         }

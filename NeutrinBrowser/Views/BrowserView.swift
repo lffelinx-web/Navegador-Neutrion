@@ -28,16 +28,43 @@ struct BrowserView: View {
         controller.pageBottomColor ?? .systemBackground
     }
 
-    var body: some View {
-        // The page sits between the status bar and the toolbar, never underneath them,
-        // so sticky headers and bottom bars of websites stay visible.
-        VStack(spacing: 0) {
-            WebViewContainer(webView: controller.webView)
-                .overlay(alignment: .top) { progressBar }
-            bottomBar
-        }
+    /// iOS 26 lets us tell WebKit how much the status bar covers, so the page can scroll
+    /// under a Safari-style blur while fixed headers stay below the clock.
+    private static var pageUnderStatusBar: Bool {
+        if #available(iOS 26.0, *) { return true }
+        return false
+    }
+
+    private var ignoredEdges: Edge.Set {
+        var edges: Edge.Set = []
+        if Self.pageUnderStatusBar { edges.insert(.top) }
         // When collapsed, the address line moves into the home-indicator strip, like Safari.
-        .ignoresSafeArea(.container, edges: collapsed ? .bottom : [])
+        if collapsed { edges.insert(.bottom) }
+        return edges
+    }
+
+    var body: some View {
+        GeometryReader { outer in
+            let safeTop = outer.safeAreaInsets.top
+            // The page never goes under the toolbar, so sites' bottom bars stay visible.
+            VStack(spacing: 0) {
+                WebViewContainer(webView: controller.webView)
+                    .overlay(alignment: .top) {
+                        if Self.pageUnderStatusBar {
+                            StatusBarBlur(height: safeTop)
+                        }
+                    }
+                    .overlay(alignment: .top) {
+                        progressBar.padding(.top, Self.pageUnderStatusBar ? safeTop : 0)
+                    }
+                bottomBar
+            }
+            .ignoresSafeArea(.container, edges: ignoredEdges)
+            .onAppear { controller.setObscuredTop(Self.pageUnderStatusBar ? safeTop : 0) }
+            .onChange(of: safeTop) { _, top in
+                controller.setObscuredTop(Self.pageUnderStatusBar ? top : 0)
+            }
+        }
         .background {
             VStack(spacing: 0) {
                 statusBarBackground

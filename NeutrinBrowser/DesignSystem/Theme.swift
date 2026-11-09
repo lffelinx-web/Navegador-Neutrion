@@ -58,6 +58,28 @@ extension View {
     }
 }
 
+/// Safari-style progressive blur behind the clock and battery: frosted at the very
+/// top, fading out just below the status bar.
+struct StatusBarBlur: View {
+    let height: CGFloat
+    var fade: CGFloat = 18
+
+    var body: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .mask(
+                LinearGradient(stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: height / max(height + fade, 1)),
+                    .init(color: .clear, location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+            )
+            .frame(height: height + fade)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
 /// Soft blue-grey backdrop with a flowing wave, as in the concept.
 struct AppBackground: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -104,7 +126,7 @@ struct WaveShape: Shape {
 
 struct SectionHeader: View {
     let title: String
-    var actionTitle = "See All"
+    var actionTitle = "Ver todo"
     var action: (() -> Void)?
 
     var body: some View {

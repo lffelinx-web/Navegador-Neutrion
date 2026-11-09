@@ -5,19 +5,32 @@
   if (!handler) return;
 
   const isVisible = (color) => color && color !== "transparent" && !/rgba\([^)]*,\s*0(\.0+)?\)$/.test(color);
-  function colorAt(y) {
-    let el = document.elementFromPoint(window.innerWidth / 2, y);
-    while (el) {
-      const color = getComputedStyle(el).backgroundColor;
-      if (isVisible(color)) return color;
-      el = el.parentElement;
-    }
+  // Only bars that stay put (fixed/sticky headers and footers) or the page's own
+  // background count. Content scrolling past the edge (photos, cards) is ignored,
+  // so the bars don't flash dark when an image passes by.
+  function rootColor() {
     for (const node of [document.body, document.documentElement]) {
       const color = node && getComputedStyle(node).backgroundColor;
       if (isVisible(color)) return color;
     }
     return null; // nothing painted: the app falls back to the page's theme-color
-
+  }
+  function colorAt(y) {
+    let el = document.elementFromPoint(window.innerWidth / 2, y);
+    let pinned = null;
+    for (let node = el; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+      const position = getComputedStyle(node).position;
+      if (position === "fixed" || position === "sticky") { pinned = node; break; }
+    }
+    if (pinned) {
+      // The pinned bar's own color, or the first colored element inside it at that point.
+      for (let node = el; node; node = node.parentElement) {
+        const color = getComputedStyle(node).backgroundColor;
+        if (isVisible(color)) return color;
+        if (node === pinned) break;
+      }
+    }
+    return rootColor();
   }
 
   let last = "";

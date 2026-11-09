@@ -33,6 +33,13 @@ struct HomeView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        // Content scrolls under a soft blur at the top instead of colliding with the clock.
+        .overlay(alignment: .top) {
+            GeometryReader { proxy in
+                StatusBarBlur(height: proxy.safeAreaInsets.top)
+            }
+            .ignoresSafeArea()
+        }
         .animation(.snappy, value: searchFocused)
         .sheet(item: $sheet) { item in
             sheetContent(item)
@@ -51,7 +58,7 @@ struct HomeView: View {
                         .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(.primary)
                         .frame(width: 42, height: 42)
-                        .glass(cornerRadius: 21, interactive: true)
+                        .glass(cornerRadius: 21)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Ajustes")
@@ -250,7 +257,7 @@ struct HomeView: View {
             .font(.subheadline.weight(.semibold))
             .padding(.horizontal, 20)
             .frame(height: 48)
-            .glass(cornerRadius: 24, interactive: true)
+            .glass(cornerRadius: 24)
         }
         .buttonStyle(.plain)
         .padding(.bottom, 8)

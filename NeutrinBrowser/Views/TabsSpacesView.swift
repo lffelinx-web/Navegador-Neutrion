@@ -12,7 +12,7 @@ struct TabsSpacesView: View {
     @State private var editingSpace: BrowserSpace?
     @State private var spacePendingDeletion: BrowserSpace?
 
-    private enum Mode { case tabs, spaces }
+    private enum Mode { case tabs, privateTabs, spaces }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -22,10 +22,13 @@ struct TabsSpacesView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     header
                     modePicker
-                    if mode == .tabs {
+                    switch mode {
+                    case .tabs:
                         spacesStrip
                         tabsSection
-                    } else {
+                    case .privateTabs:
+                        privateSection
+                    case .spaces:
                         spacesManager
                     }
                 }
@@ -42,6 +45,10 @@ struct TabsSpacesView: View {
         }
         .sheet(item: $editingSpace) { space in
             SpaceEditorView(space: space).environmentObject(store)
+        }
+        .onAppear {
+            // Opened from a private tab, start on the Private section.
+            if store.isPrivateBrowsing { mode = .privateTabs }
         }
         .confirmationDialog(
             "Delete \"\(spacePendingDeletion?.name ?? "")\"?",
@@ -84,6 +91,7 @@ struct TabsSpacesView: View {
     private var modePicker: some View {
         HStack(spacing: 4) {
             modeButton(.tabs, title: "Tabs", symbol: "square.on.square")
+            modeButton(.privateTabs, title: "Private", symbol: "eye.slash")
             modeButton(.spaces, title: "Spaces", symbol: "square.stack.3d.up")
         }
         .padding(4)
@@ -198,6 +206,61 @@ struct TabsSpacesView: View {
         }
     }
 
+    // MARK: - Private mode
+
+    private var privateSection: some View {
+        let tabs = store.privateTabs
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("Private").font(.title3.weight(.bold))
+                Text("· \(tabs.count) \(tabs.count == 1 ? "tab" : "tabs")")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !tabs.isEmpty {
+                    Button("Close All", role: .destructive) {
+                        withAnimation(.snappy) { store.closeAllPrivateTabs() }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                }
+            }
+
+            if tabs.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(Color.indigo)
+                    Text("Browse privately")
+                        .font(.headline)
+                    Text("Private tabs don't save history, and their cookies and site data are erased when you close them. Shields stay on.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity)
+                .glass(cornerRadius: 22)
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 14) {
+                    ForEach(tabs) { tab in
+                        TabCard(
+                            tab: tab,
+                            snapshot: store.snapshots[tab.id],
+                            isActive: tab.id == store.activeTabID,
+                            onSelect: {
+                                store.select(tab.id)
+                                dismiss()
+                            },
+                            onClose: {
+                                withAnimation(.snappy) { store.close(tab.id) }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Spaces mode
 
     private var spacesManager: some View {
@@ -258,23 +321,25 @@ struct TabsSpacesView: View {
     private var bottomBar: some View {
         HStack(spacing: 0) {
             Button {
-                store.newTab()
+                store.newTab(isPrivate: mode == .privateTabs)
                 dismiss()
             } label: {
-                Label("New Tab", systemImage: "plus")
+                Label(mode == .privateTabs ? "New Private Tab" : "New Tab", systemImage: "plus")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
             }
-            Divider().frame(height: 24)
-            Button { showNewSpace = true } label: {
-                Label("New Space", systemImage: "square.stack.3d.up")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
+            if mode != .privateTabs {
+                Divider().frame(height: 24)
+                Button { showNewSpace = true } label: {
+                    Label("New Space", systemImage: "square.stack.3d.up")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                }
             }
         }
         .buttonStyle(.plain)
         .font(.subheadline.weight(.semibold))
-        .foregroundStyle(Color.neutrinBlue)
+        .foregroundStyle(mode == .privateTabs ? Color.indigo : Color.neutrinBlue)
         .frame(height: 56)
         .glass(cornerRadius: 28)
         .padding(.horizontal, 20)

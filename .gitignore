@@ -4,3 +4,4 @@ xcuserdata/
 DerivedData/
 build/
 .swiftpm/
+node_modules/

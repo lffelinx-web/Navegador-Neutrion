@@ -9,6 +9,10 @@ struct BrowserView: View {
 
     @State private var isEditing = false
     @State private var addressText = ""
+    @State private var showShields = false
+    @State private var readerArticle: ReaderArticle?
+    @State private var isOpeningReader = false
+    @State private var readerFailed = false
     @FocusState private var addressFocused: Bool
 
     var body: some View {
@@ -20,6 +24,16 @@ struct BrowserView: View {
             toolbar
                 .padding(.horizontal, 14)
                 .padding(.bottom, 6)
+        }
+        .sheet(isPresented: $showShields) {
+            ShieldsPanel(controller: controller).environmentObject(store)
+        }
+        .fullScreenCover(item: $readerArticle) { article in
+            ReaderView(article: article) { url in store.open(url) }
+                .environmentObject(store)
+        }
+        .alert("Reader isn't available for this page", isPresented: $readerFailed) {
+            Button("OK", role: .cancel) {}
         }
     }
 
@@ -51,12 +65,6 @@ struct BrowserView: View {
                     controller.webView.goForward()
                 }
                 addressPill
-                if let url = controller.url {
-                    ShareLink(item: url) { ToolbarIconLabel(symbol: "square.and.arrow.up") }
-                        .accessibilityLabel("Share")
-                } else {
-                    ToolbarIcon(symbol: "square.and.arrow.up", label: "Share", isEnabled: false) {}
-                }
                 ToolbarIcon(symbol: "square.on.square", label: "Tabs") {
                     controller.captureSnapshot()
                     showTabs = true
@@ -66,29 +74,89 @@ struct BrowserView: View {
         }
         .padding(6)
         .glass(cornerRadius: 28)
+        .overlay(alignment: .top) {
+            if controller.isPrivate && !isEditing {
+                Label("Private", systemImage: "eye.slash")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.indigo, in: Capsule())
+                    .offset(y: -10)
+            }
+        }
         .animation(.snappy, value: isEditing)
     }
 
+    private var shieldsUp: Bool {
+        store.shieldsAreConfigured && store.shieldsEnabled(for: controller.url?.host)
+    }
+
     private var addressPill: some View {
-        Button {
-            addressText = controller.url?.absoluteString ?? ""
-            isEditing = true
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: controller.url?.scheme == "https" ? "lock.fill" : "globe")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text(controller.url?.displayHost ?? "")
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
+        HStack(spacing: 0) {
+            Button { showShields = true } label: {
+                Image(systemName: shieldsUp ? "shield.lefthalf.filled" : "shield.slash")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(shieldsUp ? Color.neutrinBlue : Color.secondary)
+                    .frame(width: 32, height: 40)
+                    .overlay(alignment: .topTrailing) {
+                        if shieldsUp && !controller.blockedItems.isEmpty {
+                            Text("\(min(controller.blockedItems.count, 99))")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 4)
+                                .frame(minWidth: 15, minHeight: 15)
+                                .background(Color.neutrinBlue, in: Capsule())
+                                .offset(x: 0, y: 3)
+                        }
+                    }
+                    .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
-            .frame(height: 40)
-            .background(Color(.systemBackground).opacity(0.55), in: Capsule())
+            .accessibilityLabel(shieldsUp ? "Shields up, \(controller.blockedItems.count) blocked" : "Shields down")
+
+            Button {
+                addressText = controller.url?.absoluteString ?? ""
+                isEditing = true
+            } label: {
+                HStack(spacing: 4) {
+                    if controller.url?.scheme != "https" {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.orange)
+                    }
+                    Text(controller.url?.displayHost ?? "")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                }
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Address: \(controller.url?.displayHost ?? "")")
+
+            if controller.isReaderAvailable {
+                Button(action: openReader) {
+                    Group {
+                        if isOpeningReader {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "doc.plaintext")
+                                .font(.system(size: 15, weight: .medium))
+                        }
+                    }
+                    .frame(width: 32, height: 40)
+                    .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Reader mode")
+                .transition(.scale.combined(with: .opacity))
+            } else {
+                Color.clear.frame(width: 32, height: 40)
+            }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Address: \(controller.url?.displayHost ?? "")")
+        .foregroundStyle(.primary)
+        .background(Color(.systemBackground).opacity(0.55), in: Capsule())
+        .animation(.snappy, value: controller.isReaderAvailable)
     }
 
     private var editingField: some View {
@@ -121,18 +189,40 @@ struct BrowserView: View {
                       systemImage: controller.isLoading ? "xmark" : "arrow.clockwise")
             }
             if let url = controller.url {
-                let favorite = store.isFavorite(url)
+                let shareURL = LinkCleaner.cleaned(url)
+                ShareLink(item: shareURL) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                let favorite = store.isFavorite(shareURL)
                 Button { store.toggleFavorite(title: controller.title, url: url) } label: {
                     Label(favorite ? "Remove from Favorites" : "Add to Favorites",
                           systemImage: favorite ? "star.slash" : "star")
                 }
-                Button { UIPasteboard.general.url = url } label: {
+                Button { UIPasteboard.general.url = shareURL } label: {
                     Label("Copy Link", systemImage: "link")
                 }
             }
+            if controller.isReaderAvailable {
+                Button(action: openReader) {
+                    Label("Reader Mode", systemImage: "doc.plaintext")
+                }
+            }
+            Picker(selection: $store.privacySettings.websiteDarkMode) {
+                ForEach(WebsiteDarkMode.allCases) { mode in
+                    Text(mode.name).tag(mode)
+                }
+            } label: {
+                Label("Dark Mode for Websites", systemImage: "moon")
+            }
+            .pickerStyle(.menu)
             Divider()
-            Button { store.newTab() } label: {
-                Label("New Tab", systemImage: "plus.square.on.square")
+            Button { store.newTab(isPrivate: controller.isPrivate) } label: {
+                Label(controller.isPrivate ? "New Private Tab" : "New Tab", systemImage: "plus.square.on.square")
+            }
+            if !controller.isPrivate {
+                Button { store.newTab(isPrivate: true) } label: {
+                    Label("New Private Tab", systemImage: "eye.slash")
+                }
             }
             Button { store.goHome() } label: {
                 Label("Start Page", systemImage: "house")
@@ -144,6 +234,20 @@ struct BrowserView: View {
             ToolbarIconLabel(symbol: "ellipsis")
         }
         .accessibilityLabel("More")
+    }
+
+    private func openReader() {
+        guard !isOpeningReader else { return }
+        isOpeningReader = true
+        Task {
+            let article = await controller.extractArticle()
+            isOpeningReader = false
+            if let article {
+                readerArticle = article
+            } else {
+                readerFailed = true
+            }
+        }
     }
 }
 

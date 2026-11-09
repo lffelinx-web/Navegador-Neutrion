@@ -4,6 +4,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var store: BrowserStore
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showTabs = false
 
     var body: some View {
@@ -26,6 +27,10 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { store.save() }
+        }
+        .onAppear { store.updateSystemAppearance(isDark: colorScheme == .dark) }
+        .onChange(of: colorScheme) { _, scheme in
+            store.updateSystemAppearance(isDark: scheme == .dark)
         }
     }
 }

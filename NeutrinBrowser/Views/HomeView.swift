@@ -15,7 +15,11 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 26) {
                     header
                     searchBar
+                    if store.isPrivateBrowsing {
+                        privateBanner
+                    }
                     quickActions
+                    privacyCard
                     favoritesSection
                     recentSection
                 }
@@ -90,6 +94,59 @@ struct HomeView: View {
         .padding(.horizontal, 18)
         .frame(height: 54)
         .glass(cornerRadius: 27)
+    }
+
+    private var privateBanner: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "eye.slash")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(Color.indigo, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Private Tab").font(.subheadline.weight(.bold))
+                Text("Neutrin won't remember the pages you visit, and cookies and site data are erased when you close your private tabs.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glass(cornerRadius: 20)
+    }
+
+    private var privacyCard: some View {
+        Button { sheet = .privacy } label: {
+            HStack(spacing: 14) {
+                Image(systemName: store.shieldsAreConfigured ? "shield.lefthalf.filled" : "shield.slash")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(
+                        store.shieldsAreConfigured ? AnyShapeStyle(LinearGradient.neutrin) : AnyShapeStyle(Color.gray),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(store.shieldsAreConfigured ? "Shields are protecting you" : "Shields are off")
+                        .font(.subheadline.weight(.bold))
+                    HStack(spacing: 10) {
+                        Label(store.stats.trackers.formatted(), systemImage: "eye.slash")
+                        Label(store.stats.ads.formatted(), systemImage: "rectangle.badge.xmark")
+                    }
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(14)
+            .glass(cornerRadius: 22)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Shields: \(store.stats.trackers) trackers and \(store.stats.ads) ads blocked")
     }
 
     private var quickActions: some View {
@@ -178,14 +235,16 @@ struct HomeView: View {
     }
 
     private var spaceBar: some View {
-        let count = store.tabs(in: store.activeSpaceID).count
+        let isPrivate = store.isPrivateBrowsing
+        let count = isPrivate ? store.privateTabs.count : store.tabs(in: store.activeSpaceID).count
         return Button {
             store.captureActiveSnapshot()
             showTabs = true
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: store.activeSpace?.symbol ?? "square.on.square")
-                Text(store.activeSpace?.name ?? "Tabs")
+                Image(systemName: isPrivate ? "eye.slash" : (store.activeSpace?.symbol ?? "square.on.square"))
+                    .foregroundStyle(isPrivate ? Color.indigo : Color.primary)
+                Text(isPrivate ? "Private" : (store.activeSpace?.name ?? "Tabs"))
                 Text("· \(count) \(count == 1 ? "tab" : "tabs")").foregroundStyle(.secondary)
             }
             .font(.subheadline.weight(.semibold))
@@ -234,12 +293,14 @@ struct HomeView: View {
             AddFavoriteView()
         case .scanner:
             ScannerSheet { value in sheet = nil; store.open(value) }
+        case .privacy:
+            SettingsView()
         }
     }
 }
 
 private enum HomeSheet: Identifiable {
-    case favorites, history, settings, addFavorite, scanner
+    case favorites, history, settings, addFavorite, scanner, privacy
     var id: Self { self }
 }
 

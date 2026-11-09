@@ -1,0 +1,7 @@
+{
+  "name": "neutrin-script-tests",
+  "private": true,
+  "description": "Tests for the JavaScript Neutrin injects into web pages.",
+  "scripts": { "test": "node test.js" },
+  "devDependencies": { "jsdom": "^24.0.0" }
+}

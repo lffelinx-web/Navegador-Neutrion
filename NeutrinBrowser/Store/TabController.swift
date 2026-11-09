@@ -226,8 +226,8 @@ extension TabController: WKNavigationDelegate, WKUIDelegate {
 
         if !url.isWebURL {
             let scheme = url.scheme?.lowercased() ?? ""
-            let internal = ["about", "blob", "data", "javascript", "file"].contains(scheme)
-            if !internal, navigationAction.navigationType == .linkActivated {
+            let isInternalScheme = ["about", "blob", "data", "javascript", "file"].contains(scheme)
+            if !isInternalScheme, navigationAction.navigationType == .linkActivated {
                 // mailto:, tel:, maps, App Store… open in their apps.
                 UIApplication.shared.open(url)
                 decisionHandler(.cancel)

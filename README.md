@@ -43,14 +43,27 @@ En **Ajustes → Filter Lists** puedes activar o desactivar cada lista, ver cuá
 
 ## Requisitos
 
-- Xcode 16 o posterior
-- iOS 17 o posterior
+- Xcode 16 o posterior y [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
+- iOS 17 o posterior (iPhone)
 
 ## Cómo ejecutarlo
 
-1. Abre `NeutrinBrowser.xcodeproj` en Xcode.
-2. Elige tu equipo en *Signing & Capabilities* (o usa el simulador).
-3. Pulsa ▶︎ Run.
+```sh
+xcodegen generate
+open NeutrinBrowser.xcodeproj
+```
+
+El proyecto de Xcode no se guarda en el repositorio, se genera desde `project.yml`. Elige tu equipo en *Signing & Capabilities* (o usa el simulador) y pulsa ▶︎.
+
+## Compilación y TestFlight (GitHub Actions)
+
+`.github/workflows/ios.yml` se ejecuta en cada push (salvo en la rama `certificados`):
+
+- **build:** genera el proyecto, pasa las pruebas XCTest en el simulador y crea un IPA sin firmar. Una de las pruebas compila las reglas de bloqueo con el compilador real de WebKit, incluidas EasyList y EasyPrivacy completas.
+- **scripts:** prueba los scripts de las páginas y el conversor de listas con Node, usando las listas EasyList y EasyPrivacy reales.
+- **testflight** (solo en `main`): firma la app con fastlane `match` (el certificado se guarda en la rama `certificados`) y la sube a TestFlight. Necesita estos secrets del repositorio: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` y `APPLE_TEAM_ID`.
+
+Antes de la primera subida, la app tiene que existir en App Store Connect con el bundle ID **`com.lfaz.neutrin`**.
 
 ## Estructura
 
@@ -65,6 +78,10 @@ NeutrinBrowser/
 ├── Views/          HomeView, BrowserView, TabsSpacesView, ShieldsPanel, ajustes, escáner QR
 ├── DesignSystem/   Colores, efecto glass, logo vectorial, ilustraciones
 └── Assets.xcassets
+NeutrinBrowserTests/   Pruebas XCTest (incluye compilar reglas con WebKit)
+ScriptTests/           Pruebas en Node de los scripts y del conversor
+fastlane/              Firma y subida a TestFlight
+project.yml            Definición del proyecto (XcodeGen)
 ```
 
 ## Pruebas de los scripts

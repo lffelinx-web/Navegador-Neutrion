@@ -63,8 +63,7 @@ struct HomeView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Ajustes")
             }
-            NeutrinLogo()
-                .frame(width: 86)
+            AppIconImage(size: 76)
             (Text("Neutrin").fontWeight(.bold) + Text(" Browser").fontWeight(.regular))
                 .font(.system(size: 28, design: .rounded))
                 .foregroundStyle(.primary)
@@ -136,13 +135,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(store.shieldsAreConfigured ? "Shields te está protegiendo" : "Shields está apagado")
                         .font(.subheadline.weight(.bold))
-                    HStack(spacing: 10) {
-                        Label(store.stats.trackers.formatted(), systemImage: "eye.slash")
-                        Label(store.stats.ads.formatted(), systemImage: "rectangle.badge.xmark")
-                    }
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .contentTransition(.numericText())
+                    ShieldsCounts(stats: store.shieldsStats)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
@@ -396,5 +389,20 @@ struct HistoryRow: View {
                 .foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
+    }
+}
+
+/// Live tracker/ad totals; only this small view redraws when they change.
+private struct ShieldsCounts: View {
+    @ObservedObject var stats: ShieldsStats
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Label(stats.value.trackers.formatted(), systemImage: "eye.slash")
+            Label(stats.value.ads.formatted(), systemImage: "rectangle.badge.xmark")
+        }
+        .font(.footnote.weight(.medium))
+        .foregroundStyle(.secondary)
+        .contentTransition(.numericText())
     }
 }

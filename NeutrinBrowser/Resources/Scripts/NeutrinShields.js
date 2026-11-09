@@ -50,12 +50,29 @@
   }
 
   scan(document);
-  new MutationObserver((mutations) => {
-    for (const m of mutations) {
-      if (m.type === "attributes") inspect(m.target);
-      else m.addedNodes.forEach((n) => n.nodeType === 1 && scan(n));
+
+  // Battery: pages like YouTube change the DOM constantly. Collect changed nodes and
+  // check them at most once a second, and stop watching after the first minute.
+  let queue = [];
+  let queued = false;
+  function processQueue() {
+    queued = false;
+    const nodes = queue;
+    queue = [];
+    for (const node of nodes) {
+      if (!node.isConnected) continue;
+      if (node.__neutrinAttr) { node.__neutrinAttr = false; inspect(node); } else scan(node);
     }
-  }).observe(document.documentElement, {
-    childList: true, subtree: true, attributes: true, attributeFilter: ["src", "href", "data"],
+  }
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      if (m.type === "attributes") { m.target.__neutrinAttr = true; queue.push(m.target); }
+      else for (const n of m.addedNodes) if (n.nodeType === 1) queue.push(n);
+    }
+    if (!queued && queue.length) { queued = true; setTimeout(processQueue, 1000); }
   });
+  observer.observe(document.documentElement, {
+    childList: true, subtree: true, attributes: true, attributeFilter: ["src", "data"],
+  });
+  setTimeout(() => { observer.disconnect(); processQueue(); }, 60000);
 })();

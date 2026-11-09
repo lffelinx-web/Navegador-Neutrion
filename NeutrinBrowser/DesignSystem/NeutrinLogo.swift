@@ -1,6 +1,21 @@
 import SwiftUI
 
-/// The flowing "N" mark. Same geometry as the app icon.
+/// The official app icon, rounded like on the Home Screen.
+struct AppIconImage: View {
+    var size: CGFloat = 76
+
+    var body: some View {
+        Image("AppLogo")
+            .resizable()
+            .interpolation(.high)
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
+            .shadow(color: Color.neutrinDeep.opacity(0.25), radius: size * 0.12, y: size * 0.06)
+            .accessibilityHidden(true)
+    }
+}
+
+/// The flowing "N" mark (used small, e.g. on the start-page tab card).
 struct NeutrinLogo: View {
     var body: some View {
         GeometryReader { geometry in

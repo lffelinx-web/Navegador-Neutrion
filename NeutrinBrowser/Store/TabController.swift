@@ -175,7 +175,8 @@ final class TabController: NSObject, ObservableObject {
 
     /// Runs Readability on a copy of the page. Returns `nil` if no article was found.
     func extractArticle() async -> ReaderArticle? {
-        let body = """
+        let body = ScriptLibrary.readability + """
+
         const article = new Readability(document.cloneNode(true)).parse();
         return article ? JSON.stringify(article) : "";
         """
@@ -495,7 +496,10 @@ enum ScriptLibrary {
     static let globalPrivacyControl = file("NeutrinGPC")
     static let fullscreen = file("NeutrinFullscreen")
     static let pageColors = file("NeutrinPageColors")
-    static let reader = [file("Readability"), file("Readability-readerable"), file("NeutrinReader")].joined(separator: "\n;\n")
+    /// Runs on every page: just the quick "is this an article?" check (~4 KB).
+    static let reader = [file("Readability-readerable"), file("NeutrinReader")].joined(separator: "\n;\n")
+    /// The full Readability parser (~90 KB), loaded only when reader mode is opened.
+    static let readability = file("Readability")
 
     static func darkMode(enabled: Bool) -> String {
         darkModeTemplate.replacingOccurrences(of: "__NEUTRIN_DARK_ENABLED__", with: enabled ? "true" : "false")

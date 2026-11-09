@@ -27,7 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   dom.window.eval(shields);
   const s = dom.window.document.createElement("script");
   s.src = "https://ad.doubleclick.net/later.js"; dom.window.document.body.appendChild(s);
-  await sleep(400);
+  await sleep(1400); // dynamic nodes are checked in batches, once a second
   const got = (msgs.neutrinShields || []).flat().map((x) => x.host + x.path).sort();
   console.log("  reported:", got.join(", "));
   ok(got.includes("stats.g.doubleclick.net/x.js") && got.includes("ad.doubleclick.net/later.js"), "third-party hosts incl. dynamically added");

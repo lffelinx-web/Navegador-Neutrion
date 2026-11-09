@@ -52,10 +52,11 @@
     last = key;
     handler.postMessage({ top, bottom, inverted });
   }
+  // Battery: wait until scrolling pauses, then sample once.
+  let timer = null;
   function schedule() {
-    if (scheduled) return;
-    scheduled = true;
-    setTimeout(() => requestAnimationFrame(sample), 150);
+    clearTimeout(timer);
+    timer = setTimeout(() => requestAnimationFrame(sample), 350);
   }
 
   sample();

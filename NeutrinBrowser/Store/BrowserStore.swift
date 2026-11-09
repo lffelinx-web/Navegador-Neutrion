@@ -19,7 +19,10 @@ final class BrowserStore: ObservableObject {
         didSet { privacySettingsChanged(from: oldValue) }
     }
     @Published var readerSettings: ReaderSettings
-    @Published private(set) var stats: BlockStats
+    /// Kept in its own object: counts change constantly on ad-heavy pages, and only the
+    /// screens that show them should redraw (not the whole browser).
+    let shieldsStats: ShieldsStats
+    var stats: BlockStats { shieldsStats.value }
     /// Sites where the user turned Shields off.
     @Published private(set) var shieldsDownHosts: Set<String>
     /// Set by the UI so "Igual que el sistema" website dark mode can follow the phone.
@@ -31,6 +34,9 @@ final class BrowserStore: ObservableObject {
 
     private var lastTabBySpace: [String: UUID]
     private var controllers: [UUID: TabController] = [:]
+    /// Tabs by last use (most recent last). Only a few keep a live web view.
+    private var recentTabIDs: [UUID] = []
+    private static let liveWebViewLimit = 4
     private var cancellables: Set<AnyCancellable> = []
 
     private static let historyLimit = 300
@@ -47,7 +53,7 @@ final class BrowserStore: ObservableObject {
         lastTabBySpace = state.lastTabBySpace
         privacySettings = state.privacy ?? PrivacySettings()
         readerSettings = state.reader ?? ReaderSettings()
-        stats = state.stats ?? BlockStats()
+        shieldsStats = ShieldsStats(state.stats ?? BlockStats())
         shieldsDownHosts = Set(state.shieldsDownHosts ?? [])
 
         if !spaces.contains(where: { $0.id == activeSpaceID }), let first = spaces.first {
@@ -67,8 +73,10 @@ final class BrowserStore: ObservableObject {
             Task { [weak self] in await self?.filterLists.updateIfNeeded() }
         }
 
+        // Save at most every couple of seconds while things change.
         objectWillChange
-            .debounce(for: .milliseconds(600), scheduler: RunLoop.main)
+            .merge(with: shieldsStats.objectWillChange)
+            .debounce(for: .seconds(2), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.save() }
             .store(in: &cancellables)
     }
@@ -141,7 +149,7 @@ final class BrowserStore: ObservableObject {
     }
 
     func resetStats() {
-        stats = BlockStats()
+        shieldsStats.value = BlockStats()
     }
 
     var websiteDarkModeActive: Bool {
@@ -188,8 +196,8 @@ final class BrowserStore: ObservableObject {
     private func recordBlocked(_ items: [BlockedItem]) {
         for item in items {
             switch item.category {
-            case .ads: stats.ads += 1
-            case .trackers: stats.trackers += 1
+            case .ads: shieldsStats.value.ads += 1
+            case .trackers: shieldsStats.value.trackers += 1
             }
         }
     }
@@ -245,9 +253,23 @@ final class BrowserStore: ObservableObject {
     func select(_ tabID: UUID) {
         guard let tab = tabs.first(where: { $0.id == tabID }) else { return }
         activeTabID = tabID
+        noteTabUsed(tabID)
         guard !tab.isPrivate else { return }
         activeSpaceID = tab.spaceID
         lastTabBySpace[tab.spaceID.uuidString] = tabID
+    }
+
+    /// Frees the web views of tabs you haven't used in a while (their page reloads
+    /// when you come back), so background tabs don't drain the battery.
+    private func noteTabUsed(_ tabID: UUID) {
+        recentTabIDs.removeAll { $0 == tabID }
+        recentTabIDs.append(tabID)
+        recentTabIDs.removeAll { id in !tabs.contains { $0.id == id } }
+        let live = recentTabIDs.filter { controllers[$0] != nil }
+        guard live.count > Self.liveWebViewLimit else { return }
+        for id in live.prefix(live.count - Self.liveWebViewLimit) where id != activeTabID {
+            controllers[id] = nil // the snapshot stays for the tab grid
+        }
     }
 
     func close(_ tabID: UUID) {
@@ -478,5 +500,15 @@ final class BrowserStore: ObservableObject {
             lastTabBySpace: [:], favorites: favorites, history: [], searchEngine: .duckDuckGo,
             privacy: PrivacySettings(), reader: ReaderSettings(), stats: BlockStats(), shieldsDownHosts: []
         )
+    }
+}
+
+/// Running ad/tracker totals, observed separately from the rest of the app state.
+@MainActor
+final class ShieldsStats: ObservableObject {
+    @Published var value: BlockStats
+
+    init(_ value: BlockStats) {
+        self.value = value
     }
 }

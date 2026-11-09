@@ -155,7 +155,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     HStack(spacing: 14) {
-                        NeutrinLogo().frame(width: 56)
+                        AppIconImage(size: 52)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Neutrin Browser").font(.headline)
                             Text("Una web más tranquila y privada.").font(.subheadline).foregroundStyle(.secondary)
@@ -165,10 +165,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    HStack(spacing: 12) {
-                        StatCell(value: store.stats.trackers, title: "Rastreadores")
-                        StatCell(value: store.stats.ads, title: "Anuncios")
-                    }
+                    StatsRow(stats: store.shieldsStats)
                     .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
                     Toggle("Bloquear anuncios", isOn: $store.privacySettings.blockAds)
                     Toggle("Ocultar huecos de anuncios", isOn: $store.privacySettings.hideAdPlaceholders)
@@ -282,6 +279,17 @@ struct SettingsView: View {
             .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("Aceptar", role: .cancel) {}
             }
+        }
+    }
+}
+
+private struct StatsRow: View {
+    @ObservedObject var stats: ShieldsStats
+
+    var body: some View {
+        HStack(spacing: 12) {
+            StatCell(value: stats.value.trackers, title: "Rastreadores")
+            StatCell(value: stats.value.ads, title: "Anuncios")
         }
     }
 }

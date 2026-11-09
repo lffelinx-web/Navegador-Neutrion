@@ -22,6 +22,8 @@ final class TabController: NSObject, ObservableObject {
     @Published private(set) var hasOnlySecureContent = true
     /// The toolbar shrinks to a small address pill while the user scrolls down a page.
     @Published private(set) var isToolbarCollapsed = false
+    /// The page's theme color (or background), used behind the status bar.
+    @Published private(set) var topBarColor: UIColor?
 
     var onChange: ((TabController) -> Void)?
     var onVisit: ((TabController) -> Void)?
@@ -38,6 +40,7 @@ final class TabController: NSObject, ObservableObject {
     private enum MessageName {
         static let shields = "neutrinShields"
         static let reader = "neutrinReader"
+        static let fullscreen = "neutrinFullscreen"
     }
 
     init(id: UUID, isPrivate: Bool, store: BrowserStore) {
@@ -58,13 +61,12 @@ final class TabController: NSObject, ObservableObject {
         let messageProxy = ScriptMessageProxy(owner: self)
         contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.shields)
         contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.reader)
+        contentController.add(messageProxy, contentWorld: .defaultClient, name: MessageName.fullscreen)
         installUserScripts()
 
         webView.allowsBackForwardNavigationGestures = true
         webView.navigationDelegate = self
         webView.uiDelegate = self
-        webView.scrollView.contentInset.bottom = Self.toolbarInset
-        webView.scrollView.verticalScrollIndicatorInsets.bottom = Self.toolbarInset
 
         observations = [
             webView.observe(\.title) { [weak self] _, _ in self?.sync() },
@@ -75,6 +77,8 @@ final class TabController: NSObject, ObservableObject {
             webView.observe(\.estimatedProgress) { [weak self] _, _ in self?.sync() },
             webView.observe(\.hasOnlySecureContent) { [weak self] _, _ in self?.sync() },
             webView.observe(\.fullscreenState) { [weak self] _, _ in self?.fullscreenStateChanged() },
+            webView.observe(\.themeColor) { [weak self] _, _ in self?.updateTopBarColor() },
+            webView.observe(\.underPageBackgroundColor) { [weak self] _, _ in self?.updateTopBarColor() },
             webView.scrollView.observe(\.contentOffset) { [weak self] scrollView, _ in self?.scrollViewDidScroll(scrollView) },
         ]
     }
@@ -134,6 +138,10 @@ final class TabController: NSObject, ObservableObject {
                 injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient
             ))
         }
+        contentController.addUserScript(WKUserScript(
+            source: ScriptLibrary.fullscreen,
+            injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .defaultClient
+        ))
         contentController.addUserScript(WKUserScript(
             source: ScriptLibrary.reader,
             injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient
@@ -196,11 +204,15 @@ final class TabController: NSObject, ObservableObject {
         }
     }
 
-    /// Fullscreen video: turn to landscape for wide videos, back to portrait afterwards.
+    private func updateTopBarColor() {
+        let color = webView.themeColor ?? webView.underPageBackgroundColor
+        if topBarColor != color { topBarColor = color }
+    }
+
+    /// Element fullscreen (requestFullscreen) as reported by WebKit.
     private func fullscreenStateChanged() {
         switch webView.fullscreenState {
-        case .enteringFullscreen, .inFullscreen:
-            guard !forcedLandscape else { return }
+        case .inFullscreen:
             let script = """
             (() => {
               const el = document.fullscreenElement || document.webkitFullscreenElement;
@@ -209,21 +221,26 @@ final class TabController: NSObject, ObservableObject {
             })()
             """
             webView.evaluateJavaScript(script) { [weak self] result, _ in
-                guard let self else { return }
-                let ratio = (result as? Double) ?? 0
-                // Unknown size (0) is treated as a normal wide video.
-                if ratio == 0 || ratio > 1.05 {
-                    self.forcedLandscape = true
-                    DeviceOrientation.request(.landscapeRight)
-                }
+                self?.videoFullscreenChanged(active: true, aspectRatio: (result as? Double) ?? 0)
             }
         case .notInFullscreen:
-            if forcedLandscape {
-                forcedLandscape = false
-                DeviceOrientation.request(.portrait)
-            }
+            videoFullscreenChanged(active: false, aspectRatio: 0)
         default:
             break
+        }
+    }
+
+    /// Fullscreen video (element fullscreen or iOS's native video player):
+    /// rotate to landscape for wide videos, back to portrait afterwards.
+    func videoFullscreenChanged(active: Bool, aspectRatio: Double) {
+        if active {
+            // Unknown size (0) is treated as a normal wide video.
+            guard !forcedLandscape, aspectRatio == 0 || aspectRatio > 1.05 else { return }
+            forcedLandscape = true
+            DeviceOrientation.request(.landscapeRight)
+        } else if forcedLandscape {
+            forcedLandscape = false
+            DeviceOrientation.request(.portrait)
         }
     }
 
@@ -268,6 +285,10 @@ final class TabController: NSObject, ObservableObject {
             guard !fresh.isEmpty else { return }
             blockedItems.append(contentsOf: fresh)
             onBlocked?(fresh)
+        case MessageName.fullscreen:
+            if let body = message.body as? [String: Any], let active = body["active"] as? Bool {
+                videoFullscreenChanged(active: active, aspectRatio: (body["ratio"] as? Double) ?? 0)
+            }
         case MessageName.reader:
             if let body = message.body as? [String: Any], let readerable = body["readerable"] as? Bool {
                 isReaderAvailable = readerable
@@ -401,6 +422,7 @@ enum ScriptLibrary {
     private static let darkModeTemplate = file("NeutrinDarkMode")
     static let shieldsReport = file("NeutrinShields")
     static let globalPrivacyControl = file("NeutrinGPC")
+    static let fullscreen = file("NeutrinFullscreen")
     static let reader = [file("Readability"), file("Readability-readerable"), file("NeutrinReader")].joined(separator: "\n;\n")
 
     static func darkMode(enabled: Bool) -> String {

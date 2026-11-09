@@ -147,6 +147,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   dom.window.eval(reader); await sleep(50);
   ok(msgs.neutrinReader && msgs.neutrinReader[0].readerable === false, "non-article not readerable");
 
+  // --- Fullscreen video reports (for rotating to landscape)
+  ({ dom, msgs } = makeDom(`<body><div id="player"><video></video></div></body>`, "https://m.youtube.com/watch"));
+  dom.window.eval(read("NeutrinFullscreen.js"));
+  const video = dom.window.document.querySelector("video");
+  Object.defineProperty(video, "videoWidth", { value: 1920 });
+  Object.defineProperty(video, "videoHeight", { value: 1080 });
+  video.dispatchEvent(new dom.window.Event("webkitbeginfullscreen"));
+  video.dispatchEvent(new dom.window.Event("webkitendfullscreen"));
+  const fsMsgs = msgs.neutrinFullscreen || [];
+  ok(fsMsgs.length === 2 && fsMsgs[0].active === true && Math.abs(fsMsgs[0].ratio - 16 / 9) < 0.01 && fsMsgs[1].active === false,
+     "native video fullscreen reported with aspect ratio");
+
   // --- GPC
   ({ dom } = makeDom(`<body></body>`, "https://x.com/"));
   dom.window.eval(read("NeutrinGPC.js"));

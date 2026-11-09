@@ -3,7 +3,11 @@ import SwiftUI
 /// "Pestañas y espacios": switch spaces, browse tabs as cards, manage spaces.
 struct TabsSpacesView: View {
     @EnvironmentObject private var store: BrowserStore
-    @Environment(\.dismiss) private var dismiss
+    /// Closes the screen (it's shown as an overlay so the page stays visible behind it).
+    var onClose: () -> Void
+
+    @Namespace private var modeNamespace
+    @State private var dragOffset: CGFloat = 0
 
     @State private var mode: Mode = .tabs
     @State private var isSearching = false
@@ -37,13 +41,20 @@ struct TabsSpacesView: View {
             .scrollDismissesKeyboard(.interactively)
             // Title and the Tabs/Private/Spaces island float above the content.
             .safeAreaInset(edge: .top, spacing: 0) {
-                VStack(spacing: 14) {
+                VStack(spacing: 12) {
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.45))
+                        .frame(width: 40, height: 5)
+                        .accessibilityHidden(true)
                     header
                     modePicker
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 18)
+                .padding(.top, 8)
                 .padding(.bottom, 12)
+                .contentShape(Rectangle())
+                // Swipe down on the top area to close, like a sheet.
+                .gesture(closeGesture)
                 .background {
                     Rectangle()
                         .fill(.ultraThinMaterial)
@@ -55,6 +66,7 @@ struct TabsSpacesView: View {
 
             bottomBar
         }
+        .offset(y: dragOffset)
         .sheet(isPresented: $showNewSpace) {
             SpaceEditorView(space: nil).environmentObject(store)
         }
@@ -88,7 +100,7 @@ struct TabsSpacesView: View {
                 .minimumScaleFactor(0.8)
             Spacer()
             Menu {
-                Button { dismiss() } label: { Label("Listo", systemImage: "checkmark") }
+                Button { onClose() } label: { Label("Listo", systemImage: "checkmark") }
                 Button(role: .destructive) {
                     withAnimation { store.closeAllTabs(in: store.activeSpaceID) }
                 } label: {
@@ -105,6 +117,21 @@ struct TabsSpacesView: View {
         }
     }
 
+    private var closeGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                dragOffset = max(0, value.translation.height)
+            }
+            .onEnded { value in
+                if value.translation.height > 120 || value.predictedEndTranslation.height > 320 {
+                    onClose()
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { dragOffset = 0 }
+                }
+            }
+    }
+
+    /// Floating island with a glass "droplet" that slides to the selected option.
     private var modePicker: some View {
         HStack(spacing: 4) {
             modeButton(.tabs, title: "Pestañas", symbol: "square.on.square")
@@ -118,7 +145,7 @@ struct TabsSpacesView: View {
     private func modeButton(_ value: Mode, title: String, symbol: String) -> some View {
         let selected = mode == value
         return Button {
-            withAnimation(.snappy) { mode = value }
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) { mode = value }
         } label: {
             Label(title, systemImage: symbol)
                 .font(.subheadline.weight(.semibold))
@@ -127,7 +154,8 @@ struct TabsSpacesView: View {
                 .frame(height: 40)
                 .background {
                     if selected {
-                        Capsule().fill(Color.neutrinBlue.opacity(0.16))
+                        SelectionDroplet()
+                            .matchedGeometryEffect(id: "droplet", in: modeNamespace)
                     }
                 }
                 .contentShape(Capsule())
@@ -212,7 +240,7 @@ struct TabsSpacesView: View {
                         isActive: tab.id == store.activeTabID,
                         onSelect: {
                             store.select(tab.id)
-                            dismiss()
+                            onClose()
                         },
                         onClose: {
                             withAnimation(.snappy) { store.close(tab.id) }
@@ -266,7 +294,7 @@ struct TabsSpacesView: View {
                             isActive: tab.id == store.activeTabID,
                             onSelect: {
                                 store.select(tab.id)
-                                dismiss()
+                                onClose()
                             },
                             onClose: {
                                 withAnimation(.snappy) { store.close(tab.id) }
@@ -339,7 +367,7 @@ struct TabsSpacesView: View {
         HStack(spacing: 0) {
             Button {
                 store.newTab(isPrivate: mode == .privateTabs)
-                dismiss()
+                onClose()
             } label: {
                 Label(mode == .privateTabs ? "Nueva pestaña privada" : "Nueva pestaña", systemImage: "plus")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -475,6 +503,19 @@ private struct TabCard: View {
             }
         } else {
             ArtworkView(artwork: .forID(tab.id))
+        }
+    }
+}
+
+/// The selected segment: a liquid-glass drop on iOS 26, a tinted capsule before.
+private struct SelectionDroplet: View {
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            Capsule()
+                .fill(Color.neutrinBlue.opacity(0.12))
+                .glassEffect(.regular.tint(Color.neutrinBlue.opacity(0.18)).interactive(), in: Capsule())
+        } else {
+            Capsule().fill(Color.neutrinBlue.opacity(0.16))
         }
     }
 }

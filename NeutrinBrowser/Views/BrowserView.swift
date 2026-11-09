@@ -1,7 +1,7 @@
 import SwiftUI
 import WebKit
 
-/// A loaded web page with the floating Neutrin toolbar.
+/// A loaded web page with the Neutrin toolbar underneath.
 struct BrowserView: View {
     @EnvironmentObject private var store: BrowserStore
     @ObservedObject var controller: TabController
@@ -17,33 +17,18 @@ struct BrowserView: View {
     @FocusState private var addressFocused: Bool
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            GeometryReader { proxy in
-                ZStack(alignment: .top) {
-                    // The page runs edge to edge; WebKit keeps its content clear of the notch.
-                    WebViewContainer(webView: controller.webView)
-                    // Frosted strip behind the status bar / Dynamic Island.
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .frame(height: proxy.safeAreaInsets.top)
-                        .overlay(alignment: .bottom) { progressBar }
-                        .allowsHitTesting(false)
-                }
+        // The page sits between the status bar and the toolbar, never underneath them,
+        // so sticky headers and bottom bars of websites stay visible.
+        VStack(spacing: 0) {
+            WebViewContainer(webView: controller.webView)
+                .overlay(alignment: .top) { progressBar }
+            bottomBar
+        }
+        // The status bar area takes the page's own color (theme-color), like Safari.
+        .background {
+            Color(uiColor: controller.topBarColor ?? .systemBackground)
                 .ignoresSafeArea()
-            }
-
-            Group {
-                if controller.isToolbarCollapsed && !isEditing {
-                    compactBar
-                        .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
-                } else {
-                    toolbar
-                        .padding(.horizontal, 14)
-                        .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
-                }
-            }
-            .padding(.bottom, 6)
-            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: controller.isToolbarCollapsed)
+                .animation(.easeInOut(duration: 0.25), value: controller.topBarColor)
         }
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(store)
@@ -58,6 +43,27 @@ struct BrowserView: View {
         .alert("El modo lectura no está disponible en esta página", isPresented: $readerFailed) {
             Button("Aceptar", role: .cancel) {}
         }
+    }
+
+    /// Full toolbar, or a slim address line while scrolling down. Either way it sits
+    /// below the page instead of covering it.
+    private var bottomBar: some View {
+        Group {
+            if controller.isToolbarCollapsed && !isEditing {
+                compactBar
+                    .transition(.opacity)
+            } else {
+                toolbar
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .padding(.bottom, 2)
+                    .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .background(.bar)
+        .overlay(alignment: .top) { Divider().opacity(0.5) }
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: controller.isToolbarCollapsed)
     }
 
     // MARK: - Pieces
@@ -76,12 +82,12 @@ struct BrowserView: View {
         }
     }
 
-    /// Small address pill shown while scrolling down; tap to bring the toolbar back.
+    /// Slim address line shown while scrolling down; tap to bring the toolbar back.
     private var compactBar: some View {
         Button {
             controller.setToolbarCollapsed(false)
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 if controller.isPrivate {
                     Image(systemName: "eye.slash").foregroundStyle(Color.indigo)
                 }
@@ -90,10 +96,10 @@ struct BrowserView: View {
                 Text(controller.url?.displayHost ?? "")
                     .lineLimit(1)
             }
-            .font(.footnote.weight(.semibold))
-            .padding(.horizontal, 16)
-            .frame(height: 34)
-            .glass(cornerRadius: 17, interactive: true)
+            .font(.caption.weight(.semibold))
+            .frame(maxWidth: .infinity)
+            .frame(height: 26)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Mostrar barra: \(controller.url?.displayHost ?? "")")

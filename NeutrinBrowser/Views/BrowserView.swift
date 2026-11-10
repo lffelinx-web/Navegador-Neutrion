@@ -12,6 +12,8 @@ struct BrowserView: View {
     @State private var showShields = false
     @State private var showReaderSettings = false
     @State private var showDownloads = false
+    @State private var pillDrag: CGFloat = 0
+    @State private var isSwipingTabs = false
     @ObservedObject private var downloads = DownloadManager.shared
     @State private var isOpeningReader = false
     @State private var readerFailed = false
@@ -70,7 +72,7 @@ struct BrowserView: View {
                 WebViewContainer(webView: controller.webView)
                     .overlay(alignment: .top) {
                         if Self.pageUnderStatusBar {
-                            StatusBarBlur(height: safeTop)
+                            statusBarCover(height: safeTop)
                         }
                     }
                     .overlay(alignment: .top) {
@@ -158,6 +160,24 @@ struct BrowserView: View {
                     .mask(LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom))
                     .opacity(0.6)
             }
+    }
+
+    /// Like Safari: a page with a fixed header (YouTube) gets that header's color
+    /// extended behind the clock; other pages show their content blurred under it.
+    @ViewBuilder
+    private func statusBarCover(height: CGFloat) -> some View {
+        Group {
+            if controller.pageTopPinned {
+                Color(uiColor: topColor)
+                    .frame(height: height)
+                    .transition(.opacity)
+            } else {
+                StatusBarBlur(height: height, fade: 6)
+                    .transition(.opacity)
+            }
+        }
+        .allowsHitTesting(false)
+        .animation(.easeInOut(duration: 0.25), value: controller.pageTopPinned)
     }
 
     /// Full floating toolbar, or a slim address line in the home-indicator strip.
@@ -260,6 +280,53 @@ struct BrowserView: View {
         store.shieldsAreConfigured && store.shieldsEnabled(for: controller.url?.host)
     }
 
+    private func addressLabel(host: String, insecure: Bool) -> some View {
+        HStack(spacing: 4) {
+            if insecure {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.orange)
+            }
+            Text(host)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .truncationMode(.head)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Follows the finger horizontally; a short swipe or a quick flick switches tabs.
+    private var tabSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard isSwipingTabs || abs(dx) > abs(dy) * 1.2 else { return }
+                isSwipingTabs = true
+                // Resist when there's no tab on that side.
+                pillDrag = store.adjacentTab(next: dx < 0) != nil ? dx : dx * 0.25
+            }
+            .onEnded { value in
+                defer { isSwipingTabs = false }
+                let dx = value.translation.width
+                let flick = value.predictedEndTranslation.width
+                let goNext = dx < 0
+                guard isSwipingTabs, abs(dx) > 40 || abs(flick) > 120,
+                      store.adjacentTab(next: goNext) != nil else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { pillDrag = 0 }
+                    return
+                }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                controller.captureSnapshot()
+                withAnimation(.easeOut(duration: 0.14)) { pillDrag = goNext ? -260 : 260 }
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 130_000_000)
+                    store.selectAdjacentTab(next: goNext)
+                    pillDrag = 0
+                }
+            }
+    }
+
     private var addressPill: some View {
         HStack(spacing: 0) {
             Button { showShields = true } label: {
@@ -282,36 +349,36 @@ struct BrowserView: View {
             }
             .accessibilityLabel(shieldsUp ? "Shields activado, \(controller.blockedItems.count) bloqueados" : "Shields desactivado")
 
-            Button {
+            // Tap to edit the address; swipe sideways to move between tabs (like Safari).
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                ZStack {
+                    addressLabel(host: controller.url?.displayHost ?? "",
+                                 insecure: controller.url?.scheme != "https")
+                        .offset(x: pillDrag)
+                    if pillDrag != 0, let neighbor = store.adjacentTab(next: pillDrag < 0) {
+                        // The next tab's address slides in from the side.
+                        addressLabel(host: neighbor.url?.displayHost ?? "Página de inicio", insecure: false)
+                            .offset(x: pillDrag + (pillDrag < 0 ? width : -width))
+                            .opacity(min(abs(pillDrag) / 70, 1))
+                    }
+                }
+                .frame(width: width, height: geometry.size.height)
+            }
+            .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40)
+            .clipped()
+            .contentShape(Rectangle())
+            .onTapGesture {
                 addressText = controller.url?.absoluteString ?? ""
                 isEditing = true
-            } label: {
-                HStack(spacing: 4) {
-                    if controller.url?.scheme != "https" {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.orange)
-                    }
-                    Text(controller.url?.displayHost ?? "")
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                        .truncationMode(.head)
-                }
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .contentShape(Rectangle())
             }
+            .highPriorityGesture(tabSwipeGesture)
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel("Dirección: \(controller.url?.displayHost ?? "")")
-            .accessibilityHint("Desliza a los lados para cambiar de pestaña")
-            // Swipe sideways on the address to move to the previous / next tab.
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 24)
-                    .onEnded { value in
-                        guard abs(value.translation.width) > 60,
-                              abs(value.translation.width) > abs(value.translation.height) * 2 else { return }
-                        controller.captureSnapshot()
-                        withAnimation(.snappy) { store.selectAdjacentTab(next: value.translation.width < 0) }
-                    }
-            )
+            .accessibilityHint("Toca para editar. Desliza a los lados para cambiar de pestaña.")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction(named: "Pestaña siguiente") { store.selectAdjacentTab(next: true) }
+            .accessibilityAction(named: "Pestaña anterior") { store.selectAdjacentTab(next: false) }
 
             if controller.isReaderActive {
                 Button { showReaderSettings = true } label: {

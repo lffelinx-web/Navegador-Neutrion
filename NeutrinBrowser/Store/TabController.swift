@@ -28,6 +28,8 @@ final class TabController: NSObject, ObservableObject {
     @Published private(set) var topBarColor: UIColor?
     /// Colors at the very top and bottom of the visible page, sampled by NeutrinPageColors.js.
     @Published private(set) var pageTopColor: UIColor?
+    /// The page has a fixed header right below the status bar (YouTube, many shops).
+    @Published private(set) var pageTopPinned = false
     @Published private(set) var pageBottomColor: UIColor?
 
     var onChange: ((TabController) -> Void)?
@@ -364,6 +366,8 @@ final class TabController: NSObject, ObservableObject {
         case MessageName.colors:
             guard let body = message.body as? [String: Any] else { return }
             let inverted = body["inverted"] as? Bool ?? false
+            let pinned = body["topPinned"] as? Bool ?? false
+            if pinned != pageTopPinned { pageTopPinned = pinned }
             // nil = the page paints nothing there; fall back to its theme-color.
             let top = (body["top"] as? String).flatMap { PageColor.parse($0, inverted: inverted) }
             let bottom = (body["bottom"] as? String).flatMap { PageColor.parse($0, inverted: inverted) }

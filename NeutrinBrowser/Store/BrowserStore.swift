@@ -258,12 +258,17 @@ final class BrowserStore: ObservableObject {
         return record.id
     }
 
-    /// Previous / next tab in the current group (space or private), wrapping around.
-    func selectAdjacentTab(next: Bool) {
+    /// Previous / next tab in the current group (space or private), like Safari:
+    /// no wrapping around at the ends.
+    func adjacentTab(next: Bool) -> TabRecord? {
         let group = isPrivateBrowsing ? privateTabs : tabs(in: activeSpaceID)
-        guard group.count > 1, let index = group.firstIndex(where: { $0.id == activeTabID }) else { return }
-        let target = (index + (next ? 1 : -1) + group.count) % group.count
-        select(group[target].id)
+        guard let index = group.firstIndex(where: { $0.id == activeTabID }) else { return nil }
+        let target = index + (next ? 1 : -1)
+        return group.indices.contains(target) ? group[target] : nil
+    }
+
+    func selectAdjacentTab(next: Bool) {
+        if let tab = adjacentTab(next: next) { select(tab.id) }
     }
 
     /// Adds a tab next to the current one without switching to it.

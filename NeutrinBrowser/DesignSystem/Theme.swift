@@ -70,7 +70,10 @@ struct StatusBarBlur: View {
             .mask(
                 LinearGradient(stops: [
                     .init(color: .black, location: 0),
-                    .init(color: .black, location: height / max(height + fade, 1)),
+                    // Full blur behind the clock, then a gradual fade that ends at the
+                    // status bar's edge (Safari-style progressive blur).
+                    .init(color: .black, location: 0.45 * height / max(height + fade, 1)),
+                    .init(color: .black.opacity(0.6), location: height / max(height + fade, 1)),
                     .init(color: .clear, location: 1),
                 ], startPoint: .top, endPoint: .bottom)
             )

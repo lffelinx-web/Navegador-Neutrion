@@ -15,6 +15,15 @@
     }
     return null; // nothing painted: the app falls back to the page's theme-color
   }
+  // Is the element at this height part of a fixed/sticky bar (e.g. YouTube's header)?
+  function isPinnedAt(y) {
+    for (let node = document.elementFromPoint(window.innerWidth / 2, y);
+         node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+      const position = getComputedStyle(node).position;
+      if (position === "fixed" || position === "sticky") return true;
+    }
+    return false;
+  }
   function colorAt(y) {
     let el = document.elementFromPoint(window.innerWidth / 2, y);
     let pinned = null;
@@ -47,10 +56,11 @@
       (document.head || document.documentElement).appendChild(style);
     }
     const inverted = !!document.getElementById("neutrin-dark-mode");
-    const key = top + bottom + inverted;
+    const topPinned = isPinnedAt(1);
+    const key = top + bottom + inverted + topPinned;
     if (key === last) return;
     last = key;
-    handler.postMessage({ top, bottom, inverted });
+    handler.postMessage({ top, bottom, inverted, topPinned });
   }
   // Battery: wait until scrolling pauses, then sample once.
   let timer = null;

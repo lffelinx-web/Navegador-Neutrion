@@ -48,6 +48,17 @@ struct Favorite: Identifiable, Codable, Hashable {
     var artwork: Artwork
 }
 
+/// A page saved to read later.
+struct ReadingItem: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var title: String
+    var url: URL
+    var addedAt = Date()
+    var isRead = false
+
+    var displayTitle: String { title.isEmpty ? url.displayHost : title }
+}
+
 struct HistoryEntry: Identifiable, Codable, Hashable {
     var id = UUID()
     var title: String
@@ -140,6 +151,7 @@ struct PrivacySettings: Codable, Equatable {
     var globalPrivacyControl = true
     var upgradeToHTTPS = true
     var blockCookieNotices = true
+    var lockPrivateTabs = false
     var websiteDarkMode: WebsiteDarkMode = .matchSystem
 
     init() {}
@@ -154,6 +166,7 @@ struct PrivacySettings: Codable, Equatable {
         globalPrivacyControl = try c.decodeIfPresent(Bool.self, forKey: .globalPrivacyControl) ?? defaults.globalPrivacyControl
         upgradeToHTTPS = try c.decodeIfPresent(Bool.self, forKey: .upgradeToHTTPS) ?? defaults.upgradeToHTTPS
         blockCookieNotices = try c.decodeIfPresent(Bool.self, forKey: .blockCookieNotices) ?? defaults.blockCookieNotices
+        lockPrivateTabs = try c.decodeIfPresent(Bool.self, forKey: .lockPrivateTabs) ?? defaults.lockPrivateTabs
         websiteDarkMode = try c.decodeIfPresent(WebsiteDarkMode.self, forKey: .websiteDarkMode) ?? defaults.websiteDarkMode
     }
 }

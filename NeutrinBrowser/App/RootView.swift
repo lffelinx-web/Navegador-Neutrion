@@ -21,6 +21,12 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: store.activeTab?.url == nil)
+        // Private tabs stay covered until Face ID / passcode unlocks them.
+        .overlay {
+            if store.privateTabsLocked && store.isPrivateBrowsing && !showTabs {
+                PrivateLockView()
+            }
+        }
         // Tabs & Spaces slides up over the page and can be swiped down to close.
         .overlay {
             if showTabs {
@@ -30,6 +36,9 @@ struct RootView: View {
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.9), value: showTabs)
         .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                store.appDidEnterBackground()
+            }
             if phase == .active {
                 store.checkForFilterListUpdates()
                 store.updateSystemAppearance(isDark: Self.systemIsDark)

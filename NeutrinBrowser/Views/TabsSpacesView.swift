@@ -48,7 +48,13 @@ struct TabsSpacesView: View {
                         spacesStrip
                         tabsSection
                     case .privateTabs:
-                        privateSection
+                        if store.privateTabsLocked && !store.privateTabs.isEmpty {
+                            PrivateLockView()
+                                .frame(height: 400)
+                                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        } else {
+                            privateSection
+                        }
                     case .spaces:
                         spacesManager
                     }

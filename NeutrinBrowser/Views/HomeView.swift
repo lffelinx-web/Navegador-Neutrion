@@ -277,12 +277,10 @@ struct HomeView: View {
     private func perform(_ action: QuickAction) {
         switch action {
         case .favorites: sheet = .favorites
-        case .read: sheet = .history
-        case .tools: sheet = .settings
+        case .read: sheet = .readingList
+        case .tools: sheet = .tools
         case .add: sheet = .addFavorite
-        case .apps:
-            store.captureActiveSnapshot()
-            showTabs = true
+        case .apps: sheet = .topSites
         case .explore, .watch, .images:
             if let url = action.url { store.open(url) }
         }
@@ -303,12 +301,31 @@ struct HomeView: View {
             ScannerSheet { value in sheet = nil; store.open(value) }
         case .privacy:
             SettingsView()
+        case .readingList:
+            ReadingListView { url in sheet = nil; store.open(url) }
+        case .topSites:
+            TopSitesView { url in sheet = nil; store.open(url) }
+        case .downloads:
+            DownloadsView(downloads: DownloadManager.shared)
+        case .tools:
+            ToolsView { tool in
+                switch tool {
+                case .downloads: sheet = .downloads
+                case .history: sheet = .history
+                case .readingList: sheet = .readingList
+                case .scanner: sheet = .scanner
+                case .settings: sheet = .settings
+                case .privateTab:
+                    sheet = nil
+                    store.newTab(isPrivate: true)
+                }
+            }
         }
     }
 }
 
 private enum HomeSheet: Identifiable {
-    case favorites, history, settings, addFavorite, scanner, privacy
+    case favorites, history, settings, addFavorite, scanner, privacy, readingList, topSites, downloads, tools
     var id: Self { self }
 }
 
@@ -324,7 +341,7 @@ private enum QuickAction: CaseIterable, Identifiable {
         case .watch: "Ver"
         case .images: "Imágenes"
         case .tools: "Herramientas"
-        case .apps: "Apps"
+        case .apps: "Frecuentes"
         case .add: "Añadir"
         }
     }
@@ -337,7 +354,7 @@ private enum QuickAction: CaseIterable, Identifiable {
         case .watch: "play"
         case .images: "photo"
         case .tools: "cube"
-        case .apps: "square.grid.2x2"
+        case .apps: "chart.bar"
         case .add: "plus"
         }
     }

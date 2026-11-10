@@ -32,6 +32,8 @@
 	<true/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Neutrin usa Face ID para proteger tus pestañas privadas.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Neutrin usa la cámara para escanear códigos QR.</string>
 	<key>UILaunchScreen</key>

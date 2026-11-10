@@ -13,6 +13,11 @@ final class BrowserStore: ObservableObject {
     @Published var favorites: [Favorite]
     @Published var history: [HistoryEntry]
     @Published var searchEngine: SearchEngine
+    @Published var readingList: [ReadingItem]
+    /// Text size per site (1 = 100 %).
+    @Published private(set) var pageZoomByHost: [String: Double]
+    /// Private tabs are hidden behind Face ID after the app goes to the background.
+    @Published var privateTabsLocked = false
     @Published private(set) var snapshots: [UUID: UIImage] = [:]
 
     @Published var privacySettings: PrivacySettings {
@@ -50,6 +55,8 @@ final class BrowserStore: ObservableObject {
         favorites = state.favorites
         history = state.history
         searchEngine = state.searchEngine
+        readingList = state.readingList ?? []
+        pageZoomByHost = state.pageZoomByHost ?? [:]
         lastTabBySpace = state.lastTabBySpace
         privacySettings = state.privacy ?? PrivacySettings()
         readerSettings = state.reader ?? ReaderSettings()
@@ -249,6 +256,14 @@ final class BrowserStore: ObservableObject {
         tabs.append(record)
         select(record.id)
         return record.id
+    }
+
+    /// Previous / next tab in the current group (space or private), wrapping around.
+    func selectAdjacentTab(next: Bool) {
+        let group = isPrivateBrowsing ? privateTabs : tabs(in: activeSpaceID)
+        guard group.count > 1, let index = group.firstIndex(where: { $0.id == activeTabID }) else { return }
+        let target = (index + (next ? 1 : -1) + group.count) % group.count
+        select(group[target].id)
     }
 
     /// Adds a tab next to the current one without switching to it.
@@ -453,6 +468,80 @@ final class BrowserStore: ObservableObject {
         }
     }
 
+    // MARK: - Reading list
+
+    func isInReadingList(_ url: URL) -> Bool {
+        readingList.contains { $0.url == LinkCleaner.cleaned(url) }
+    }
+
+    func toggleReadingList(title: String, url: URL) {
+        let url = LinkCleaner.cleaned(url)
+        if let index = readingList.firstIndex(where: { $0.url == url }) {
+            readingList.remove(at: index)
+        } else {
+            readingList.insert(ReadingItem(title: title, url: url), at: 0)
+        }
+    }
+
+    func markRead(_ item: ReadingItem, _ read: Bool = true) {
+        guard let index = readingList.firstIndex(where: { $0.id == item.id }) else { return }
+        readingList[index].isRead = read
+    }
+
+    func removeReadingItems(at offsets: IndexSet, in items: [ReadingItem]) {
+        let ids = Set(offsets.map { items[$0].id })
+        readingList.removeAll { ids.contains($0.id) }
+    }
+
+    // MARK: - Most visited
+
+    /// Sites you visit most, from history (one entry per site).
+    func topSites(limit: Int = 12) -> [HistoryEntry] {
+        var counts: [String: (count: Int, entry: HistoryEntry)] = [:]
+        for entry in history {
+            let host = entry.url.displayHost
+            if let existing = counts[host] {
+                counts[host] = (existing.count + 1, existing.entry)
+            } else {
+                let root = URL(string: "\(entry.url.scheme ?? "https")://\(entry.url.host ?? host)/") ?? entry.url
+                counts[host] = (1, HistoryEntry(title: host, url: root, visitedAt: entry.visitedAt))
+            }
+        }
+        return counts.values.sorted { $0.count > $1.count }.prefix(limit).map(\.entry)
+    }
+
+    // MARK: - Text size per site
+
+    static let zoomSteps: [Double] = [0.5, 0.75, 0.85, 1, 1.15, 1.25, 1.5, 1.75, 2]
+
+    func pageZoom(for host: String?) -> Double {
+        guard let host = Self.normalizedHost(host) else { return 1 }
+        return pageZoomByHost[host] ?? 1
+    }
+
+    func setPageZoom(_ zoom: Double, for host: String?) {
+        guard let host = Self.normalizedHost(host) else { return }
+        pageZoomByHost[host] = zoom == 1 ? nil : zoom
+        for controller in controllers.values where Self.normalizedHost(controller.url?.host) == host {
+            controller.webView.pageZoom = zoom
+        }
+    }
+
+    func stepPageZoom(for host: String?, larger: Bool) {
+        let current = pageZoom(for: host)
+        let steps = Self.zoomSteps
+        let next = larger ? steps.first { $0 > current + 0.001 } : steps.last { $0 < current - 0.001 }
+        if let next { setPageZoom(next, for: host) }
+    }
+
+    // MARK: - Private tab lock
+
+    func appDidEnterBackground() {
+        if privacySettings.lockPrivateTabs && !privateTabs.isEmpty {
+            privateTabsLocked = true
+        }
+    }
+
     func removeHistory(at offsets: IndexSet) {
         history.remove(atOffsets: offsets)
     }
@@ -495,6 +584,8 @@ final class BrowserStore: ObservableObject {
         var reader: ReaderSettings?
         var stats: BlockStats?
         var shieldsDownHosts: [String]?
+        var readingList: [ReadingItem]?
+        var pageZoomByHost: [String: Double]?
     }
 
     private static var stateURL: URL {
@@ -510,7 +601,8 @@ final class BrowserStore: ObservableObject {
             spaces: spaces, tabs: tabs.filter { !$0.isPrivate }, activeSpaceID: activeSpaceID,
             activeTabID: savedActiveTab, lastTabBySpace: lastTabBySpace, favorites: favorites,
             history: history, searchEngine: searchEngine, privacy: privacySettings, reader: readerSettings,
-            stats: stats, shieldsDownHosts: shieldsDownHosts.sorted()
+            stats: stats, shieldsDownHosts: shieldsDownHosts.sorted(),
+            readingList: readingList, pageZoomByHost: pageZoomByHost
         )
         guard let data = try? JSONEncoder().encode(state) else { return }
         try? data.write(to: Self.stateURL, options: [.atomic, .completeFileProtection])
@@ -535,7 +627,8 @@ final class BrowserStore: ObservableObject {
         return PersistedState(
             spaces: [personal, work, study], tabs: [], activeSpaceID: personal.id, activeTabID: nil,
             lastTabBySpace: [:], favorites: favorites, history: [], searchEngine: .duckDuckGo,
-            privacy: PrivacySettings(), reader: ReaderSettings(), stats: BlockStats(), shieldsDownHosts: []
+            privacy: PrivacySettings(), reader: ReaderSettings(), stats: BlockStats(), shieldsDownHosts: [],
+            readingList: [], pageZoomByHost: [:]
         )
     }
 }

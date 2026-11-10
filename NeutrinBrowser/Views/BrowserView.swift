@@ -42,6 +42,12 @@ struct BrowserView: View {
         return false
     }
 
+    private static var homeIndicatorHeight: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets.bottom }
+            .first ?? 34
+    }
+
     private var ignoredEdges: Edge.Set {
         var edges: Edge.Set = []
         if Self.pageUnderStatusBar { edges.insert(.top) }
@@ -54,7 +60,11 @@ struct BrowserView: View {
     var body: some View {
         GeometryReader { outer in
             let safeTop = outer.safeAreaInsets.top
-            let safeBottom = outer.safeAreaInsets.bottom
+            // `safeAreaInsets.bottom` grows to the keyboard's height while typing; the
+            // window's own inset is just the home-indicator strip.
+            let homeIndicator = Self.homeIndicatorHeight
+            let keyboardUp = outer.safeAreaInsets.bottom > homeIndicator + 60
+            let safeBottom = keyboardUp ? 0 : homeIndicator
             // The page never goes under the toolbar, so sites' bottom bars stay visible.
             VStack(spacing: 0) {
                 WebViewContainer(webView: controller.webView)
@@ -291,6 +301,17 @@ struct BrowserView: View {
                 .contentShape(Rectangle())
             }
             .accessibilityLabel("Dirección: \(controller.url?.displayHost ?? "")")
+            .accessibilityHint("Desliza a los lados para cambiar de pestaña")
+            // Swipe sideways on the address to move to the previous / next tab.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 24)
+                    .onEnded { value in
+                        guard abs(value.translation.width) > 60,
+                              abs(value.translation.width) > abs(value.translation.height) * 2 else { return }
+                        controller.captureSnapshot()
+                        withAnimation(.snappy) { store.selectAdjacentTab(next: value.translation.width < 0) }
+                    }
+            )
 
             if controller.isReaderActive {
                 Button { showReaderSettings = true } label: {
@@ -380,6 +401,29 @@ struct BrowserView: View {
                 Button { UIPasteboard.general.url = shareURL } label: {
                     Label("Copiar enlace", systemImage: "link")
                 }
+            }
+            Button { controller.showFindInPage() } label: {
+                Label("Buscar en la página", systemImage: "doc.text.magnifyingglass")
+            }
+            if let url = controller.url, !controller.isReaderActive {
+                let saved = store.isInReadingList(url)
+                Button { store.toggleReadingList(title: controller.title, url: url) } label: {
+                    Label(saved ? "Quitar de la lista de lectura" : "Añadir a lista de lectura",
+                          systemImage: saved ? "book.closed" : "eyeglasses")
+                }
+            }
+            ControlGroup {
+                Button { store.stepPageZoom(for: controller.url?.host, larger: false) } label: {
+                    Label("Texto más pequeño", systemImage: "textformat.size.smaller")
+                }
+                Button { store.setPageZoom(1, for: controller.url?.host) } label: {
+                    Text("\(Int((store.pageZoom(for: controller.url?.host) * 100).rounded())) %")
+                }
+                Button { store.stepPageZoom(for: controller.url?.host, larger: true) } label: {
+                    Label("Texto más grande", systemImage: "textformat.size.larger")
+                }
+            } label: {
+                Label("Tamaño del texto", systemImage: "textformat.size")
             }
             if controller.isReaderActive {
                 Button { controller.exitReader() } label: {

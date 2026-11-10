@@ -187,6 +187,7 @@ struct SettingsView: View {
                     Toggle("Quitar rastreo de los enlaces", isOn: $store.privacySettings.removeTrackingParameters)
                     Toggle("Global Privacy Control", isOn: $store.privacySettings.globalPrivacyControl)
                     Toggle("Cambiar a HTTPS", isOn: $store.privacySettings.upgradeToHTTPS)
+                    Toggle("Bloquear pestañas privadas con Face ID", isOn: $store.privacySettings.lockPrivateTabs)
                     NavigationLink {
                         ShieldsExceptionsView()
                     } label: {

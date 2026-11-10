@@ -78,6 +78,12 @@ final class TabController: NSObject, ObservableObject {
         installUserScripts()
 
         webView.allowsBackForwardNavigationGestures = true
+        // Buscar en la página (iOS's own find bar).
+        webView.isFindInteractionEnabled = true
+        // Pull down to reload.
+        let refresh = UIRefreshControl()
+        refresh.addTarget(self, action: #selector(pullToRefresh(_:)), for: .valueChanged)
+        webView.scrollView.refreshControl = refresh
         webView.navigationDelegate = self
         webView.uiDelegate = self
 
@@ -107,6 +113,18 @@ final class TabController: NSObject, ObservableObject {
         }
         applyShields(forHost: target.host)
         webView.load(request)
+    }
+
+    @objc private func pullToRefresh(_ control: UIRefreshControl) {
+        webView.reload()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            control.endRefreshing()
+        }
+    }
+
+    func showFindInPage() {
+        webView.findInteraction?.presentFindNavigator(showingReplace: false)
     }
 
     func reloadOrStop() {
@@ -418,6 +436,9 @@ extension TabController: WKNavigationDelegate, WKUIDelegate {
         isReaderAvailable = false
         // Any other navigation (a link, going back) leaves reader mode.
         if navigation !== readerNavigation { isReaderActive = false }
+        // Text size the user chose for this site.
+        let zoom = store?.pageZoom(for: webView.url?.host) ?? 1
+        if webView.pageZoom != zoom { webView.pageZoom = zoom }
         setToolbarCollapsed(false)
         sync()
     }

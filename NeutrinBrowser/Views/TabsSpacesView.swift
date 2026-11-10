@@ -549,10 +549,10 @@ private struct TabCard: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .clipped()
         } else if tab.url == nil {
+            // Start page: the app's own background and icon, light or dark like the app.
             ZStack {
-                LinearGradient(colors: [Color(red: 0.95, green: 0.96, blue: 0.99), Color(red: 0.84, green: 0.89, blue: 0.97)],
-                               startPoint: .top, endPoint: .bottom)
-                NeutrinLogo().frame(width: 46)
+                AppBackground()
+                AppIconImage(size: 46)
             }
         } else {
             ArtworkView(artwork: .forID(tab.id))
